@@ -1,0 +1,10 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Home Weather",
+        "description": "Climate monitoring and automation for your home."
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "domain": "home_weather",
+  "name": "Home Weather",
+  "codeowners": ["@zodyking"],
+  "config_flow": true,
+  "dependencies": ["http", "frontend", "panel_custom"],
+  "documentation": "https://github.com/zodyking/Home-Climate",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/zodyking/Home-Climate/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}
