@@ -126,27 +126,23 @@ const STYLES = `
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 28px;
-    border-radius: 14px;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
     border: 1px solid var(--card-border);
     background: rgba(255, 255, 255, 0.08);
     cursor: pointer;
     transition: all 0.2s;
   }
   .onoff-toggle.on {
-    background: var(--accent);
-    border-color: var(--accent);
+    background: rgba(255, 255, 255, 0.06);
+    border-color: var(--card-border);
   }
-  .onoff-toggle .toggle-dot {
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: #fff;
-    transition: transform 0.2s;
+  .onoff-toggle .toggle-icon {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
   }
-  .onoff-toggle:not(.on) .toggle-dot { transform: translateX(-7px); }
-  .onoff-toggle.on .toggle-dot { transform: translateX(7px); }
   .fan-badge-btn {
     all: unset;
     cursor: pointer;
@@ -229,8 +225,10 @@ const STYLES = `
   .temp-wheel-svg {
     width: 100%;
     height: 100%;
+    pointer-events: none;
+  }
+  .temp-wheel-wrap {
     cursor: pointer;
-    transform: rotate(-135deg);
   }
   .temp-wheel-track {
     fill: none;
@@ -408,6 +406,7 @@ const STYLES = `
     width: 16px;
     height: 16px;
     flex-shrink: 0;
+    object-fit: contain;
   }
   .loading {
     padding: 60px 24px;
@@ -502,7 +501,7 @@ class HomeWeatherPanel extends HTMLElement {
 
   _startRefresh() {
     this._stopRefresh();
-    this._refreshInterval = setInterval(() => this._loadDashboardData(), 15000);
+    this._refreshInterval = setInterval(() => this._loadDashboardData(), 1000);
   }
 
   _stopRefresh() {
@@ -608,10 +607,12 @@ class HomeWeatherPanel extends HTMLElement {
           toggle.classList.toggle("on", isOn);
           toggle.dataset.isOn = isOn;
           toggle.setAttribute("aria-label", isOn ? "Turn off" : "Turn on");
+          const img = toggle.querySelector(".toggle-icon");
+          if (img) img.src = `/home_climate_panel/icons/${isOn ? "power-on" : "power-off"}.png`;
         }
 
         appCard.querySelectorAll(".ctrl-btn[data-action='mode']").forEach((btn) => {
-          const m = btn.dataset.hvacMode;
+          const m = (btn.dataset.hvacMode || "").toLowerCase();
           btn.classList.toggle("active", mode === m);
         });
 
@@ -907,7 +908,7 @@ class HomeWeatherPanel extends HTMLElement {
       <div class="appliance-subcard" data-entity="${entity}" data-room-name="${roomName}">
         <div class="onoff-toggle-wrap">
           <button class="onoff-toggle ${isOn ? "on" : ""}" data-action="onoff" data-entity="${entity}" data-room-name="${roomName}" data-is-on="${isOn}" aria-label="${isOn ? "Turn off" : "Turn on"}">
-            <span class="toggle-dot"></span>
+            <img class="toggle-icon" src="/home_climate_panel/icons/${isOn ? "power-on" : "power-off"}.png" alt="">
           </button>
         </div>
         <h4 class="device-name">${this._escapeHtml(appliance.device_name || "Appliance")}</h4>
@@ -939,7 +940,7 @@ class HomeWeatherPanel extends HTMLElement {
   _renderTempWheel(room) {
     const minT = room.min_temp ?? 16;
     const maxT = room.max_temp ?? 30;
-    const mode = room.climate_mode || "off";
+    const mode = (room.climate_mode || room.climate_state || "off").toLowerCase();
     const isFanOnly = mode === "fan_only";
     const target = room.target_temp != null ? Math.round(room.target_temp) : Math.round((minT + maxT) / 2);
     const range = maxT - minT || 1;
@@ -952,7 +953,7 @@ class HomeWeatherPanel extends HTMLElement {
     const circum = 2 * Math.PI * r;
     const arcLen = circum * 0.75;
     const dashLen = norm * arcLen;
-    const dashOffset = circum * 0.375;
+    const dashOffset = circum * 0.625;
 
     const knobAngle = -135 + 270 * norm;
     const rad = (knobAngle * Math.PI) / 180;
@@ -964,7 +965,7 @@ class HomeWeatherPanel extends HTMLElement {
     const ttsRoomName = room._roomNameForTts || room.name || "Room";
     const disabledClass = isFanOnly ? " temp-wheel-disabled" : "";
     return `
-      <div class="temp-wheel-wrap${disabledClass}" data-entity="${this._escapeHtml(room.climate_entity || "")}" data-room-name="${this._escapeHtml(ttsRoomName)}" data-min="${minT}" data-max="${maxT}" data-target="${target}" data-disabled="${isFanOnly}">
+      <div class="temp-wheel-wrap${disabledClass}" data-entity="${this._escapeHtml(room.climate_entity || "")}" data-room-name="${this._escapeHtml(ttsRoomName)}" data-min="${minT}" data-max="${maxT}" data-target="${target}" data-unit="${this._escapeHtml(unit)}" data-disabled="${isFanOnly}">
         <svg class="temp-wheel-svg" viewBox="0 0 100 100" aria-hidden="true">
           <circle class="temp-wheel-track" cx="50" cy="50" r="${r}" />
           <circle class="temp-wheel-fill" cx="50" cy="50" r="${r}" stroke-dasharray="${dashLen} 500" stroke-dashoffset="${-dashOffset}" />
@@ -982,7 +983,7 @@ class HomeWeatherPanel extends HTMLElement {
   _renderRoomCard(room, asSubCard = false) {
     const temp = room.temp != null ? room.temp.toFixed(1) : "—";
     const humidity = room.humidity != null ? room.humidity.toFixed(0) : "—";
-    const mode = room.climate_mode || "off";
+    const mode = (room.climate_mode || room.climate_state || "off").toLowerCase();
     const hvacAction = room.hvac_action || null;
     const fanMode = room.fan_mode || null;
     const hasClimate = !!(room.climate_entity && !room.is_monitor_only);
@@ -993,11 +994,11 @@ class HomeWeatherPanel extends HTMLElement {
     const allowedModes = this._allowedModes(room.hvac_modes);
     const fanModes = room.fan_modes || [];
 
-    /* Material Design style icons - fire, snowflake, water-off, fan, power */
-    const heatIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17.66 11L12 21l-5.66-10C5.22 11 4 12.5 4 14.5c0 2.5 2 4.5 4.5 4.5H19c2.21 0 4-1.79 4-4 0-1.56-.88-2.93-2.17-3.61z"/></svg>`;
-    const coolIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 1.81A2.5 2.5 0 0 1 13 6.5a2.5 2.5 0 0 1-1 2A2.5 2.5 0 0 1 11 6.5a2.5 2.5 0 0 1 1-4.69m0 8.69a2.5 2.5 0 0 1 1 2 2.5 2.5 0 0 1-1 2 2.5 2.5 0 0 1-1-2 2.5 2.5 0 0 1 1-2m0 8.69a2.5 2.5 0 0 1 1 2 2.5 2.5 0 0 1-1 2 2.5 2.5 0 0 1-1-2 2.5 2.5 0 0 1 1-2M5 12.5a2.5 2.5 0 0 1 1 2 2.5 2.5 0 0 1-1 2 2.5 2.5 0 0 1-1-2 2.5 2.5 0 0 1 1-2m14 0a2.5 2.5 0 0 1 1 2 2.5 2.5 0 0 1-1 2 2.5 2.5 0 0 1-1-2 2.5 2.5 0 0 1 1-2M12 5a2.5 2.5 0 0 1 2 1 2.5 2.5 0 0 1-2 1 2.5 2.5 0 0 1-2-1 2.5 2.5 0 0 1 2-1m0 14a2.5 2.5 0 0 1 2 1 2.5 2.5 0 0 1-2 1 2.5 2.5 0 0 1-2-1 2.5 2.5 0 0 1 2-1m-7-7a2.5 2.5 0 0 1 2 1 2.5 2.5 0 0 1-2 1 2.5 2.5 0 0 1-2-1 2.5 2.5 0 0 1 2-1m14 0a2.5 2.5 0 0 1 2 1 2.5 2.5 0 0 1-2 1 2.5 2.5 0 0 1-2-1 2.5 2.5 0 0 1 2-1z"/></svg>`;
-    const dryIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.69c.75.75 1.27 1.6 1.65 2.52.36.88.63 1.78.63 2.79a5.5 5.5 0 0 1-11 0c0-1.01.27-1.91.63-2.79.38-.92.9-1.77 1.65-2.52m0 1.81c-.65.65-1.14 1.39-1.44 2.16-.28.72-.49 1.47-.49 2.2a4 4 0 0 0 8 0c0-.73-.21-1.48-.49-2.2-.3-.77-.79-1.51-1.44-2.16M7 18l-4-4 1.41-1.41L7 14.17l9.59-9.59L18 6l-11 11z"/></svg>`;
-    const fanIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 10c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3zm0 4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-10c-4.42 0-8 3.58-8 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/></svg>`;
+    const iconBase = "/home_climate_panel/icons";
+    const heatIcon = `<img class="ctrl-icon" src="${iconBase}/heatmode.png" alt="Heat">`;
+    const coolIcon = `<img class="ctrl-icon" src="${iconBase}/coolmode.png" alt="Cool">`;
+    const dryIcon = `<img class="ctrl-icon" src="${iconBase}/drymode.png" alt="Dehumidifier">`;
+    const fanIcon = `<img class="ctrl-icon" src="${iconBase}/fan_onlymode.png" alt="Fan">`;
     const offIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.58-5.42L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"/></svg>`;
 
     const modeIcons = { heat: heatIcon, cool: coolIcon, dry: dryIcon, fan_only: fanIcon, off: offIcon };
@@ -1190,21 +1191,44 @@ class HomeWeatherPanel extends HTMLElement {
       const roomName = wrap.dataset.roomName || "Room";
       const minT = parseFloat(wrap.dataset.min) || 16;
       const maxT = parseFloat(wrap.dataset.max) || 30;
+      const unit = wrap.dataset.unit || "°C";
       if (!entity) return;
-      const svg = wrap.querySelector(".temp-wheel-svg");
+      const fillCircle = wrap.querySelector(".temp-wheel-fill");
+      const knob = wrap.querySelector("[data-wheel-knob]");
+      const targetEl = wrap.querySelector(".temp-wheel-target");
+      const r = 45;
+      const circum = 2 * Math.PI * r;
+      const arcLen = circum * 0.75;
+      const dashOffset = circum * 0.625;
 
       const getNormFromEvent = (e) => {
-        const rect = svg.getBoundingClientRect();
+        const rect = wrap.getBoundingClientRect();
         const cx = rect.left + rect.width / 2;
         const cy = rect.top + rect.height / 2;
         const x = (e.clientX || e.touches?.[0]?.clientX) - cx;
         const y = (e.clientY || e.touches?.[0]?.clientY) - cy;
-        const clickAngle = (Math.atan2(y, x) * 180) / Math.PI;
-        const ourAngle = clickAngle + 135;
-        return Math.max(0, Math.min(1, ourAngle / 270));
+        const angleDeg = (Math.atan2(y, x) * 180) / Math.PI;
+        return Math.max(0, Math.min(1, (angleDeg + 135) / 270));
       };
 
       const normToTemp = (norm) => Math.round(minT + norm * (maxT - minT));
+
+      const updateDOM = (norm) => {
+        const dashLen = norm * arcLen;
+        if (fillCircle) {
+          fillCircle.setAttribute("stroke-dasharray", `${dashLen} 500`);
+          fillCircle.setAttribute("stroke-dashoffset", String(-dashOffset));
+        }
+        const knobAngle = -135 + 270 * norm;
+        const rad = (knobAngle * Math.PI) / 180;
+        const knobX = 50 + r * Math.cos(rad);
+        const knobY = 50 + r * Math.sin(rad);
+        if (knob) {
+          knob.setAttribute("cx", String(knobX));
+          knob.setAttribute("cy", String(knobY));
+        }
+        if (targetEl) targetEl.textContent = `${normToTemp(norm)}${unit}`;
+      };
 
       const handleSetTemp = (norm) => {
         const temp = normToTemp(norm);
@@ -1215,9 +1239,11 @@ class HomeWeatherPanel extends HTMLElement {
         e.preventDefault();
         e.stopPropagation();
         let lastNorm = getNormFromEvent(e);
+        updateDOM(lastNorm);
         const onMove = (ev) => {
           ev.preventDefault();
           lastNorm = getNormFromEvent(ev);
+          updateDOM(lastNorm);
         };
         const onUp = () => {
           document.removeEventListener("mousemove", onMove);
@@ -1232,8 +1258,8 @@ class HomeWeatherPanel extends HTMLElement {
         document.addEventListener("touchend", onUp);
       };
 
-      svg?.addEventListener("mousedown", onDown);
-      svg?.addEventListener("touchstart", onDown, { passive: false });
+      wrap.addEventListener("mousedown", onDown);
+      wrap.addEventListener("touchstart", onDown, { passive: false });
     });
   }
 
