@@ -465,6 +465,7 @@ class HomeWeatherPanel extends HTMLElement {
     this._refreshInterval = null;
     this._collapsedRooms = new Set();
     this._collapsedAppliances = new Set();
+    this._draggingWheelEntity = null;
   }
 
   set hass(hass) {
@@ -593,8 +594,8 @@ class HomeWeatherPanel extends HTMLElement {
         const appCard = Array.from(roomCard.querySelectorAll(".appliance-subcard")).find((el) => (el.dataset.entity || "") === entity);
         if (!appCard) continue;
 
-        const isOn = (app.climate_mode || app.climate_state || "off") !== "off";
-        const mode = app.climate_mode || "off";
+        const mode = (app.climate_mode || app.climate_state || "off").toLowerCase();
+        const isOn = mode !== "off";
         const fanMode = app.fan_mode || "";
         const fanModes = app.fan_modes || [];
         const appUnit = (room.temperature_unit || "°C").replace("°", "").toUpperCase() === "F" ? "°F" : "°C";
@@ -624,18 +625,22 @@ class HomeWeatherPanel extends HTMLElement {
 
         const wheelWrap = appCard.querySelector(".temp-wheel-wrap");
         if (wheelWrap) {
-          wheelWrap.classList.toggle("temp-wheel-disabled", isFanOnly);
-          wheelWrap.dataset.disabled = isFanOnly;
-          const targetEl = wheelWrap.querySelector(".temp-wheel-target");
-          const roomEl = wheelWrap.querySelector(".temp-wheel-room");
-          if (targetEl) targetEl.textContent = targetDisplay;
-          if (roomEl) roomEl.textContent = `Room − ${roomTemp}${appUnit}`;
+          wheelWrap.dataset.hvacMode = mode;
+          if (entity !== this._draggingWheelEntity) {
+            wheelWrap.classList.toggle("temp-wheel-disabled", isFanOnly);
+            wheelWrap.dataset.disabled = isFanOnly;
+            const targetEl = wheelWrap.querySelector(".temp-wheel-target");
+            const roomEl = wheelWrap.querySelector(".temp-wheel-room");
+            if (targetEl) targetEl.textContent = targetDisplay;
+            if (roomEl) roomEl.textContent = `Room − ${roomTemp}${appUnit}`;
+          }
         }
 
         const tempBtns = appCard.querySelector(".temp-buttons");
         if (tempBtns) {
           tempBtns.classList.toggle("temp-buttons-hidden", isFanOnly);
           tempBtns.dataset.fanOnly = isFanOnly;
+          tempBtns.querySelectorAll(".temp-btn").forEach((tb) => { tb.dataset.hvacMode = mode; });
         }
       }
     }
@@ -932,7 +937,8 @@ class HomeWeatherPanel extends HTMLElement {
     let allowed = ["heat", "cool", "dry", "fan_only", "off"];
     if (excludeOff) allowed = allowed.filter((m) => m !== "off");
     if (hvacModes && hvacModes.length > 0) {
-      return allowed.filter((m) => hvacModes.includes(m) && !exclude.has(m));
+      const lower = (hvacModes || []).map((m) => (m || "").toLowerCase());
+      return allowed.filter((m) => lower.includes(m) && !exclude.has(m));
     }
     return allowed;
   }
@@ -965,7 +971,7 @@ class HomeWeatherPanel extends HTMLElement {
     const ttsRoomName = room._roomNameForTts || room.name || "Room";
     const disabledClass = isFanOnly ? " temp-wheel-disabled" : "";
     return `
-      <div class="temp-wheel-wrap${disabledClass}" data-entity="${this._escapeHtml(room.climate_entity || "")}" data-room-name="${this._escapeHtml(ttsRoomName)}" data-min="${minT}" data-max="${maxT}" data-target="${target}" data-unit="${this._escapeHtml(unit)}" data-disabled="${isFanOnly}">
+      <div class="temp-wheel-wrap${disabledClass}" data-entity="${this._escapeHtml(room.climate_entity || "")}" data-room-name="${this._escapeHtml(ttsRoomName)}" data-hvac-mode="${this._escapeHtml(mode)}" data-min="${minT}" data-max="${maxT}" data-target="${target}" data-unit="${this._escapeHtml(unit)}" data-disabled="${isFanOnly}">
         <svg class="temp-wheel-svg" viewBox="0 0 100 100" aria-hidden="true">
           <circle class="temp-wheel-track" cx="50" cy="50" r="${r}" />
           <circle class="temp-wheel-fill" cx="50" cy="50" r="${r}" stroke-dasharray="${dashLen} 500" stroke-dashoffset="${-dashOffset}" />
@@ -1009,8 +1015,8 @@ class HomeWeatherPanel extends HTMLElement {
       ${hasClimate ? this._renderTempWheel(room) : ""}
       ${hasClimate ? `
         <div class="temp-buttons ${mode === "fan_only" ? "temp-buttons-hidden" : ""}" data-fan-only="${mode === "fan_only"}">
-          <button class="temp-btn" data-action="temp-down" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}" data-min="${minT}" data-max="${maxT}" data-target="${currentTarget}">−</button>
-          <button class="temp-btn" data-action="temp-up" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}" data-min="${minT}" data-max="${maxT}" data-target="${currentTarget}">+</button>
+          <button class="temp-btn" data-action="temp-down" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}" data-hvac-mode="${this._escapeHtml(mode)}" data-min="${minT}" data-max="${maxT}" data-target="${currentTarget}">−</button>
+          <button class="temp-btn" data-action="temp-up" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}" data-hvac-mode="${this._escapeHtml(mode)}" data-min="${minT}" data-max="${maxT}" data-target="${currentTarget}">+</button>
         </div>
       ` : ""}
       ${!asSubCard ? `
@@ -1056,15 +1062,17 @@ class HomeWeatherPanel extends HTMLElement {
     `;
   }
 
-  async _setTemperature(entityId, temperature, roomName) {
+  async _setTemperature(entityId, temperature, roomName, hvacMode) {
     if (!this._hass || !entityId) return;
     try {
-      await this._hass.callWS({
+      const payload = {
         type: "home_climate/set_temperature",
         entity_id: entityId,
         temperature: parseFloat(temperature),
         room_name: roomName || "Room",
-      });
+      };
+      if (hvacMode && hvacMode !== "off") payload.hvac_mode = hvacMode;
+      await this._hass.callWS(payload);
       await this._loadDashboardData();
     } catch (e) {
       console.error("Set temperature error:", e);
@@ -1175,6 +1183,7 @@ class HomeWeatherPanel extends HTMLElement {
         const entity = e.currentTarget.dataset.entity;
         const action = e.currentTarget.dataset.action;
         const roomName = e.currentTarget.dataset.roomName || "Room";
+        const hvacMode = (e.currentTarget.dataset.hvacMode || "").toLowerCase();
         if (!entity) return;
         const minT = parseFloat(e.currentTarget.dataset.min) || 16;
         const maxT = parseFloat(e.currentTarget.dataset.max) || 30;
@@ -1182,7 +1191,7 @@ class HomeWeatherPanel extends HTMLElement {
         const step = 1;
         if (action === "temp-down") target = Math.max(minT, target - step);
         else if (action === "temp-up") target = Math.min(maxT, target + step);
-        this._setTemperature(entity, target, roomName);
+        this._setTemperature(entity, target, roomName, hvacMode);
       });
     });
 
@@ -1230,14 +1239,16 @@ class HomeWeatherPanel extends HTMLElement {
         if (targetEl) targetEl.textContent = `${normToTemp(norm)}${unit}`;
       };
 
+      const hvacMode = (wrap.dataset.hvacMode || "").toLowerCase();
       const handleSetTemp = (norm) => {
         const temp = normToTemp(norm);
-        this._setTemperature(entity, temp, roomName);
+        this._setTemperature(entity, temp, roomName, hvacMode);
       };
 
       const onDown = (e) => {
         e.preventDefault();
         e.stopPropagation();
+        this._draggingWheelEntity = entity;
         let lastNorm = getNormFromEvent(e);
         updateDOM(lastNorm);
         const onMove = (ev) => {
@@ -1250,6 +1261,7 @@ class HomeWeatherPanel extends HTMLElement {
           document.removeEventListener("mouseup", onUp);
           document.removeEventListener("touchmove", onMove, { passive: false });
           document.removeEventListener("touchend", onUp);
+          this._draggingWheelEntity = null;
           handleSetTemp(lastNorm);
         };
         document.addEventListener("mousemove", onMove);
