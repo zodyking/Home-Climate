@@ -19,9 +19,45 @@ DEFAULT_TTS_VOLUME = 0.7
 
 # TTS message templates (user customizable)
 DEFAULT_TTS_PREFIX = "Message from Home Climate."
-DEFAULT_MODE_CHANGE_MSG = "{prefix} {room_name} climate set to {mode}"
-DEFAULT_PRESENCE_ON_MSG = "{prefix} {room_name} climate turned on"
-DEFAULT_PRESENCE_OFF_MSG = "{prefix} {room_name} climate turned off"
+
+# TTS event keys
+TTS_MANUAL_ON = "manual_on"
+TTS_MANUAL_OFF = "manual_off"
+TTS_MODE_CHANGE = "mode_change"
+TTS_TEMP_CHANGE = "temp_change"
+TTS_PRESENCE_ENTER = "presence_enter"
+TTS_PRESENCE_LEAVE = "presence_leave"
+TTS_FAN_CHANGE = "fan_change"
+
+TTS_EVENT_KEYS = [
+    TTS_MANUAL_ON,
+    TTS_MANUAL_OFF,
+    TTS_MODE_CHANGE,
+    TTS_TEMP_CHANGE,
+    TTS_PRESENCE_ENTER,
+    TTS_PRESENCE_LEAVE,
+    TTS_FAN_CHANGE,
+]
+
+# Default templates per event
+DEFAULT_TTS_MESSAGES = {
+    TTS_MANUAL_ON: "{prefix} {room_name} {device_name} turned on",
+    TTS_MANUAL_OFF: "{prefix} {room_name} {device_name} turned off",
+    TTS_MODE_CHANGE: "{prefix} {room_name} {device_name} set to {mode}",
+    TTS_TEMP_CHANGE: "{prefix} {room_name} {device_name} temperature set to {temp}",
+    TTS_PRESENCE_ENTER: "{prefix} {room_name} {device_name} turned on",
+    TTS_PRESENCE_LEAVE: "{prefix} {room_name} {device_name} turned off",
+    TTS_FAN_CHANGE: "{prefix} {room_name} {device_name} fan set to {fan_mode}",
+}
+
+# Device types for appliances
+DEVICE_TYPES = ["heater", "ac", "minisplit", "dehumidifier"]
+DEVICE_TYPE_LABELS = {
+    "heater": "Heater",
+    "ac": "AC",
+    "minisplit": "Minisplit",
+    "dehumidifier": "Dehumidifier",
+}
 
 # Climate monitor settings
 CLIMATE_CHECK_INTERVAL = 30  # seconds between climate logic checks
@@ -33,7 +69,7 @@ DEFAULT_COOL_THRESHOLD_C = 26
 DEFAULT_OUTDOOR_HEAT_ONLY_BELOW_C = 15
 DEFAULT_OUTDOOR_COOL_ONLY_ABOVE_C = 25
 
-# Default presence rules
+# Default presence rules (per-appliance)
 DEFAULT_ENTER_DURATION_SEC = 30
 DEFAULT_EXIT_DURATION_SEC = 300
 
@@ -46,28 +82,42 @@ SEASONAL_MODES = [SEASONAL_MODE_OUTDOOR_TEMP, SEASONAL_MODE_DATE]
 DEFAULT_DATE_WINTER_START = "11-01"
 DEFAULT_DATE_WINTER_END = "03-31"
 
-# Default config structure
-DEFAULT_CONFIG = {
-    "rooms": [],
-    "automation": {
+
+def _default_tts_messages() -> dict:
+    """Build default messages dict with enabled + template per event."""
+    return {
+        key: {"enabled": True, "template": DEFAULT_TTS_MESSAGES[key]}
+        for key in TTS_EVENT_KEYS
+    }
+
+
+def default_appliance_automation() -> dict:
+    """Default automation for an appliance."""
+    return {
+        "person": "",
+        "zone": "",
+        "enter_duration_sec": DEFAULT_ENTER_DURATION_SEC,
+        "exit_duration_sec": DEFAULT_EXIT_DURATION_SEC,
+        "target_temp_on_enter": 22.0,
         "heat_threshold_c": DEFAULT_HEAT_THRESHOLD_C,
         "cool_threshold_c": DEFAULT_COOL_THRESHOLD_C,
         "seasonal_mode": SEASONAL_MODE_OUTDOOR_TEMP,
+        "outdoor_temp_sensor": "",
         "date_winter_start": DEFAULT_DATE_WINTER_START,
         "date_winter_end": DEFAULT_DATE_WINTER_END,
-        "outdoor_temp_sensor": "",
         "outdoor_cool_only_above_c": DEFAULT_OUTDOOR_COOL_ONLY_ABOVE_C,
         "outdoor_heat_only_below_c": DEFAULT_OUTDOOR_HEAT_ONLY_BELOW_C,
-    },
-    "presence_rules": [],
+    }
+
+
+# Default config structure (new schema)
+DEFAULT_CONFIG = {
+    "rooms": [],
     "tts_settings": {
         "language": DEFAULT_TTS_LANGUAGE,
         "speed": DEFAULT_TTS_SPEED,
         "volume": DEFAULT_TTS_VOLUME,
         "prefix": DEFAULT_TTS_PREFIX,
-        "media_player": "",
-        "mode_change_msg": DEFAULT_MODE_CHANGE_MSG,
-        "presence_on_msg": DEFAULT_PRESENCE_ON_MSG,
-        "presence_off_msg": DEFAULT_PRESENCE_OFF_MSG,
+        "messages": _default_tts_messages(),
     },
 }

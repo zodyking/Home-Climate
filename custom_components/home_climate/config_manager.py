@@ -19,7 +19,11 @@ from .const import (
     DEFAULT_HEAT_THRESHOLD_C,
     DEFAULT_OUTDOOR_COOL_ONLY_ABOVE_C,
     DEFAULT_OUTDOOR_HEAT_ONLY_BELOW_C,
+    DEVICE_TYPES,
     SEASONAL_MODES,
+    TTS_EVENT_KEYS,
+    DEFAULT_TTS_MESSAGES,
+    default_appliance_automation,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -79,19 +83,27 @@ class ConfigManager:
         return self._config.get("rooms", [])
 
     @property
-    def automation(self) -> dict[str, Any]:
-        """Return automation configuration."""
-        return self._config.get("automation", DEFAULT_CONFIG["automation"])
-
-    @property
-    def presence_rules(self) -> list[dict[str, Any]]:
-        """Return presence rules configuration."""
-        return self._config.get("presence_rules", [])
-
-    @property
     def tts_settings(self) -> dict[str, Any]:
         """Return TTS settings."""
         return self._config.get("tts_settings", DEFAULT_CONFIG["tts_settings"])
+
+    def get_room_for_climate_entity(self, climate_entity: str) -> tuple[dict, dict] | None:
+        """Return (room, appliance) for a climate entity, or None."""
+        for room in self.rooms:
+            for appliance in room.get("appliances", []):
+                if (appliance.get("climate_entity") or "").strip() == climate_entity:
+                    return (room, appliance)
+        return None
+
+    def get_device_name(self, appliance: dict[str, Any]) -> str:
+        """Return display name for appliance: custom_name or device_type label."""
+        from .const import DEVICE_TYPE_LABELS
+
+        custom = (appliance.get("custom_name") or "").strip()
+        if custom:
+            return custom
+        dtype = appliance.get("device_type") or "minisplit"
+        return DEVICE_TYPE_LABELS.get(dtype, dtype)
 
     async def async_load(self) -> None:
         """Load configuration from file."""
@@ -119,37 +131,122 @@ class ConfigManager:
         except IOError as err:
             _LOGGER.error("Error saving config: %s", err)
 
+    def _migrate_old_config(self, loaded: dict[str, Any]) -> dict[str, Any]:
+        """Migrate old schema to new room/appliance schema."""
+        result = deepcopy(DEFAULT_CONFIG)
+        old_rooms = loaded.get("rooms") or []
+        old_presence = loaded.get("presence_rules") or []
+        old_automation = loaded.get("automation") or {}
+        old_tts = loaded.get("tts_settings") or {}
+
+        # Build presence lookup by climate_entity
+        presence_by_entity: dict[str, dict] = {}
+        for rule in old_presence:
+            ce = (rule.get("climate_entity") or "").strip()
+            if ce:
+                presence_by_entity[ce] = rule
+
+        new_rooms = []
+        for room in old_rooms:
+            if not isinstance(room, dict) or not room.get("name"):
+                continue
+            room_id = room.get("id") or str(uuid.uuid4())
+            appliances = []
+            climate_entity = (room.get("climate_entity") or "").strip()
+
+            if climate_entity:
+                pres = presence_by_entity.get(climate_entity, {})
+                auto = default_appliance_automation()
+                auto["person"] = (pres.get("person") or "").strip()
+                auto["zone"] = (pres.get("zone") or "").strip()
+                auto["enter_duration_sec"] = max(
+                    0, min(600, _safe_int(pres.get("enter_duration_sec"), 30))
+                )
+                auto["exit_duration_sec"] = max(
+                    0, min(3600, _safe_int(pres.get("exit_duration_sec"), 300))
+                )
+                tte = pres.get("target_temp_on_enter")
+                auto["target_temp_on_enter"] = _safe_float(tte, 22.0) if tte is not None else 22.0
+                auto["heat_threshold_c"] = _safe_float(
+                    old_automation.get("heat_threshold_c"), 18
+                )
+                auto["cool_threshold_c"] = _safe_float(
+                    old_automation.get("cool_threshold_c"), 26
+                )
+                auto["seasonal_mode"] = old_automation.get("seasonal_mode") or "outdoor_temp"
+                auto["outdoor_temp_sensor"] = (
+                    old_automation.get("outdoor_temp_sensor") or ""
+                ).strip()
+                auto["date_winter_start"] = (
+                    old_automation.get("date_winter_start") or "11-01"
+                ).strip()
+                auto["date_winter_end"] = (
+                    old_automation.get("date_winter_end") or "03-31"
+                ).strip()
+
+                appliances.append({
+                    "id": str(uuid.uuid4()),
+                    "device_type": "minisplit",
+                    "custom_name": "",
+                    "climate_entity": climate_entity,
+                    "automation": auto,
+                })
+
+            new_rooms.append({
+                "id": room_id,
+                "name": str(room.get("name", "")).strip(),
+                "temp_sensor": (room.get("temp_sensor") or "").strip() or None,
+                "humidity_sensor": (room.get("humidity_sensor") or "").strip() or None,
+                "media_player": (old_tts.get("media_player") or "").strip() or "",
+                "volume": max(0.0, min(1.0, _safe_float(old_tts.get("volume"), 0.7))),
+                "tts_overrides": {},
+                "appliances": appliances,
+            })
+
+        result["rooms"] = self._validate_rooms(new_rooms)
+
+        # Migrate TTS
+        default_msgs = DEFAULT_CONFIG["tts_settings"]["messages"]
+        messages = {}
+        for key in TTS_EVENT_KEYS:
+            entry = default_msgs.get(key, {"enabled": True, "template": DEFAULT_TTS_MESSAGES.get(key, "")})
+            if key == "mode_change" and old_tts.get("mode_change_msg"):
+                entry = {"enabled": True, "template": str(old_tts["mode_change_msg"])}
+            elif key == "presence_enter" and old_tts.get("presence_on_msg"):
+                entry = {"enabled": True, "template": str(old_tts["presence_on_msg"])}
+            elif key == "presence_leave" and old_tts.get("presence_off_msg"):
+                entry = {"enabled": True, "template": str(old_tts["presence_off_msg"])}
+            messages[key] = entry
+
+        result["tts_settings"] = {
+            "language": str(old_tts.get("language", "en")),
+            "speed": max(0.5, min(2.0, _safe_float(old_tts.get("speed"), 1.0))),
+            "volume": max(0.0, min(1.0, _safe_float(old_tts.get("volume"), 0.7))),
+            "prefix": str(old_tts.get("prefix", "Message from Home Climate.")),
+            "messages": messages,
+        }
+
+        return result
+
     def _merge_with_defaults(self, loaded: dict[str, Any]) -> dict[str, Any]:
-        """Merge loaded config with defaults to ensure all keys exist."""
+        """Merge loaded config with defaults; migrate old schema if needed."""
+        needs_migration = "presence_rules" in loaded
+        if not needs_migration and loaded.get("rooms"):
+            for r in loaded["rooms"]:
+                if isinstance(r, dict) and "climate_entity" in r and "appliances" not in r:
+                    needs_migration = True
+                    break
+        if needs_migration:
+            _LOGGER.info("Migrating Home Climate config from old schema")
+            return self._migrate_old_config(loaded)
+
         result = deepcopy(DEFAULT_CONFIG)
 
-        # Rooms
         if "rooms" in loaded and isinstance(loaded["rooms"], list):
             result["rooms"] = self._validate_rooms(loaded["rooms"])
 
-        # Automation
-        if "automation" in loaded and isinstance(loaded["automation"], dict):
-            result["automation"] = self._validate_automation(loaded["automation"])
-
-        # Presence rules
-        if "presence_rules" in loaded and isinstance(loaded["presence_rules"], list):
-            result["presence_rules"] = self._validate_presence_rules(
-                loaded["presence_rules"]
-            )
-
-        # TTS settings
         if "tts_settings" in loaded and isinstance(loaded["tts_settings"], dict):
-            default_tts = DEFAULT_CONFIG["tts_settings"]
-            for k, v in default_tts.items():
-                result["tts_settings"][k] = loaded["tts_settings"].get(
-                    k, v
-                )
-            # Ensure string fields are strings
-            for k in ("language", "prefix", "media_player", "mode_change_msg", "presence_on_msg", "presence_off_msg"):
-                if k in result["tts_settings"] and result["tts_settings"][k] is not None:
-                    result["tts_settings"][k] = str(result["tts_settings"][k])
-            result["tts_settings"]["speed"] = max(0.5, min(2.0, _safe_float(result["tts_settings"].get("speed"), 1.0)))
-            result["tts_settings"]["volume"] = max(0.0, min(1.0, _safe_float(result["tts_settings"].get("volume"), 0.7)))
+            result["tts_settings"] = self._validate_tts_settings(loaded["tts_settings"])
 
         return result
 
@@ -157,80 +254,91 @@ class ConfigManager:
         """Validate and sanitize rooms configuration."""
         validated = []
         for room in rooms:
-            if isinstance(room, dict) and room.get("name"):
-                room_id = room.get("id")
-                if not room_id or not isinstance(room_id, str):
-                    room_id = str(uuid.uuid4())
-                validated.append({
-                    "id": room_id,
-                    "name": str(room["name"]).strip(),
-                    "climate_entity": str(room.get("climate_entity", "")).strip() or None,
-                    "temp_sensor": str(room.get("temp_sensor", "")).strip() or None,
-                    "humidity_sensor": str(room.get("humidity_sensor", "")).strip() or None,
-                })
-        return validated
-
-    def _validate_automation(self, auto: dict[str, Any]) -> dict[str, Any]:
-        """Validate and sanitize automation configuration."""
-        seasonal_mode = auto.get("seasonal_mode", "outdoor_temp")
-        if seasonal_mode not in SEASONAL_MODES:
-            seasonal_mode = "outdoor_temp"
-
-        return {
-            "heat_threshold_c": max(5, min(35, _safe_float(auto.get("heat_threshold_c"), DEFAULT_HEAT_THRESHOLD_C))),
-            "cool_threshold_c": max(15, min(40, _safe_float(auto.get("cool_threshold_c"), DEFAULT_COOL_THRESHOLD_C))),
-            "seasonal_mode": seasonal_mode,
-            "date_winter_start": str(auto.get("date_winter_start", "11-01")).strip(),
-            "date_winter_end": str(auto.get("date_winter_end", "03-31")).strip(),
-            "outdoor_temp_sensor": str(auto.get("outdoor_temp_sensor", "")).strip() or "",
-            "outdoor_cool_only_above_c": max(10, min(40, _safe_float(auto.get("outdoor_cool_only_above_c"), DEFAULT_OUTDOOR_COOL_ONLY_ABOVE_C))),
-            "outdoor_heat_only_below_c": max(-10, min(30, _safe_float(auto.get("outdoor_heat_only_below_c"), DEFAULT_OUTDOOR_HEAT_ONLY_BELOW_C))),
-        }
-
-    def _validate_presence_rules(
-        self, rules: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
-        """Validate and sanitize presence rules."""
-        validated = []
-        for rule in rules:
-            if not isinstance(rule, dict):
+            if not isinstance(room, dict) or not room.get("name"):
                 continue
-            person = str(rule.get("person", "")).strip()
-            zone = str(rule.get("zone", "")).strip()
-            climate_entity = str(rule.get("climate_entity", "")).strip()
-            if not person or not zone or not climate_entity:
-                continue
+            room_id = room.get("id") or str(uuid.uuid4())
             validated.append({
-                "person": person,
-                "zone": zone,
-                "climate_entity": climate_entity,
-                "enter_duration_sec": max(0, min(600, _safe_int(rule.get("enter_duration_sec"), DEFAULT_ENTER_DURATION_SEC))),
-                "exit_duration_sec": max(0, min(3600, _safe_int(rule.get("exit_duration_sec"), DEFAULT_EXIT_DURATION_SEC))),
-                "target_temp_on_enter": _safe_float(rule.get("target_temp_on_enter"), 22.0) if rule.get("target_temp_on_enter") else None,
+                "id": room_id,
+                "name": str(room.get("name", "")).strip(),
+                "temp_sensor": str(room.get("temp_sensor", "")).strip() or None,
+                "humidity_sensor": str(room.get("humidity_sensor", "")).strip() or None,
+                "media_player": str(room.get("media_player", "")).strip() or "",
+                "volume": max(0.0, min(1.0, _safe_float(room.get("volume"), 0.7))),
+                "tts_overrides": dict(room.get("tts_overrides") or {}),
+                "appliances": self._validate_appliances(room.get("appliances") or []),
             })
         return validated
+
+    def _validate_appliances(self, appliances: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Validate appliances list."""
+        validated = []
+        default_auto = default_appliance_automation()
+        for app in appliances:
+            if not isinstance(app, dict):
+                continue
+            app_id = app.get("id") or str(uuid.uuid4())
+            dtype = app.get("device_type") or "minisplit"
+            if dtype not in DEVICE_TYPES:
+                dtype = "minisplit"
+            climate_entity = str(app.get("climate_entity", "")).strip() or None
+            auto_raw = app.get("automation") or {}
+            auto = {}
+            for k, default_val in default_auto.items():
+                if k in ("person", "zone", "outdoor_temp_sensor", "date_winter_start", "date_winter_end"):
+                    auto[k] = str(auto_raw.get(k, default_val)).strip() or default_val
+                elif k in ("enter_duration_sec", "exit_duration_sec"):
+                    auto[k] = max(0, min(3600, _safe_int(auto_raw.get(k), default_val)))
+                elif k in ("heat_threshold_c", "cool_threshold_c"):
+                    auto[k] = max(5, min(40, _safe_float(auto_raw.get(k), default_val)))
+                elif k == "target_temp_on_enter":
+                    v = auto_raw.get(k)
+                    auto[k] = _safe_float(v, 22.0) if v is not None else 22.0
+                elif k == "seasonal_mode":
+                    auto[k] = auto_raw.get(k) if auto_raw.get(k) in SEASONAL_MODES else default_val
+                elif k in ("outdoor_cool_only_above_c", "outdoor_heat_only_below_c"):
+                    auto[k] = max(-10, min(40, _safe_float(auto_raw.get(k), default_val)))
+                else:
+                    auto[k] = auto_raw.get(k, default_val)
+
+            validated.append({
+                "id": app_id,
+                "device_type": dtype,
+                "custom_name": str(app.get("custom_name", "")).strip(),
+                "climate_entity": climate_entity,
+                "automation": auto,
+            })
+        return validated
+
+    def _validate_tts_settings(self, tts: dict[str, Any]) -> dict[str, Any]:
+        """Validate TTS settings with messages structure."""
+        default = DEFAULT_CONFIG["tts_settings"]
+        messages = {}
+        for key in TTS_EVENT_KEYS:
+            entry = tts.get("messages", {}).get(key)
+            if isinstance(entry, dict):
+                messages[key] = {
+                    "enabled": bool(entry.get("enabled", True)),
+                    "template": str(entry.get("template", DEFAULT_TTS_MESSAGES.get(key, ""))),
+                }
+            else:
+                messages[key] = default["messages"].get(
+                    key, {"enabled": True, "template": DEFAULT_TTS_MESSAGES.get(key, "")}
+                )
+
+        return {
+            "language": str(tts.get("language", default["language"])),
+            "speed": max(0.5, min(2.0, _safe_float(tts.get("speed"), default["speed"]))),
+            "volume": max(0.0, min(1.0, _safe_float(tts.get("volume"), default["volume"]))),
+            "prefix": str(tts.get("prefix", default["prefix"])),
+            "messages": messages,
+        }
 
     async def async_update_config(self, new_config: dict[str, Any]) -> None:
         """Update full configuration with validation."""
         if "rooms" in new_config:
             self._config["rooms"] = self._validate_rooms(new_config["rooms"])
-        if "automation" in new_config:
-            self._config["automation"] = self._validate_automation(new_config["automation"])
-        if "presence_rules" in new_config:
-            self._config["presence_rules"] = self._validate_presence_rules(
-                new_config["presence_rules"]
-            )
         if "tts_settings" in new_config:
-            tts = new_config["tts_settings"]
-            default = DEFAULT_CONFIG["tts_settings"]
-            self._config["tts_settings"] = {
-                "language": str(tts.get("language", default["language"])),
-                "speed": max(0.5, min(2.0, _safe_float(tts.get("speed"), default["speed"]))),
-                "volume": max(0.0, min(1.0, _safe_float(tts.get("volume"), default["volume"]))),
-                "prefix": str(tts.get("prefix", default["prefix"])),
-                "media_player": str(tts.get("media_player", "")).strip() or "",
-                "mode_change_msg": str(tts.get("mode_change_msg", default["mode_change_msg"])),
-                "presence_on_msg": str(tts.get("presence_on_msg", default["presence_on_msg"])),
-                "presence_off_msg": str(tts.get("presence_off_msg", default["presence_off_msg"])),
-            }
+            self._config["tts_settings"] = self._validate_tts_settings(
+                new_config["tts_settings"]
+            )
         await self.async_save()

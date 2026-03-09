@@ -1,4 +1,4 @@
-"""Climate monitor for Home Climate - threshold and seasonal automation."""
+"""Climate monitor for Home Climate - threshold and seasonal automation (per-appliance)."""
 from __future__ import annotations
 
 import asyncio
@@ -14,6 +14,7 @@ from .const import (
     DOMAIN,
     SEASONAL_MODE_DATE,
     SEASONAL_MODE_OUTDOOR_TEMP,
+    TTS_MODE_CHANGE,
 )
 
 if TYPE_CHECKING:
@@ -48,7 +49,7 @@ def _is_winter_date(winter_start: str, winter_end: str) -> bool:
 
 
 class ClimateMonitor:
-    """Monitor indoor/outdoor temps and control climate entities."""
+    """Monitor indoor/outdoor temps and control climate entities (per-appliance)."""
 
     def __init__(self, hass: HomeAssistant, config_manager: "ConfigManager") -> None:
         self.hass = hass
@@ -80,47 +81,17 @@ class ClimateMonitor:
             await asyncio.sleep(CLIMATE_CHECK_INTERVAL)
 
     async def _check_and_control(self) -> None:
-        """Check temps and apply climate control logic."""
+        """Check temps and apply climate control logic (per-appliance)."""
         config_manager = self.config_manager
         rooms = config_manager.rooms
-        auto = config_manager.automation
         if not rooms:
             return
 
-        heat_threshold = float(auto.get("heat_threshold_c", 18))
-        cool_threshold = float(auto.get("cool_threshold_c", 26))
-        seasonal_mode = auto.get("seasonal_mode", SEASONAL_MODE_OUTDOOR_TEMP)
-        outdoor_sensor = (auto.get("outdoor_temp_sensor") or "").strip()
-        cool_only_above = float(auto.get("outdoor_cool_only_above_c", 25))
-        heat_only_below = float(auto.get("outdoor_heat_only_below_c", 15))
-        winter_start = (auto.get("date_winter_start") or "11-01").strip()
-        winter_end = (auto.get("date_winter_end") or "03-31").strip()
-
-        outdoor_temp: float | None = None
-        if outdoor_sensor:
-            state = self.hass.states.get(outdoor_sensor)
-            if state and state.state not in ("unknown", "unavailable"):
-                unit = state.attributes.get("unit_of_measurement")
-                outdoor_temp = _parse_temp(state.state, unit)
-
-        heat_allowed = True
-        cool_allowed = True
-        if seasonal_mode == SEASONAL_MODE_OUTDOOR_TEMP and outdoor_temp is not None:
-            if outdoor_temp < heat_only_below:
-                cool_allowed = False
-            elif outdoor_temp > cool_only_above:
-                heat_allowed = False
-        elif seasonal_mode == SEASONAL_MODE_DATE:
-            if _is_winter_date(winter_start, winter_end):
-                cool_allowed = False
-            else:
-                heat_allowed = False
-
         now = datetime.now().timestamp()
+
         for room in rooms:
-            climate_entity = (room.get("climate_entity") or "").strip()
             temp_sensor = (room.get("temp_sensor") or "").strip()
-            if not climate_entity or not temp_sensor:
+            if not temp_sensor:
                 continue
 
             state = self.hass.states.get(temp_sensor)
@@ -132,32 +103,65 @@ class ClimateMonitor:
             if indoor_temp is None:
                 continue
 
-            climate_state = self.hass.states.get(climate_entity)
-            current_mode = (climate_state.attributes.get("hvac_mode") or "off") if climate_state else "off"
+            for appliance in room.get("appliances", []):
+                climate_entity = (appliance.get("climate_entity") or "").strip()
+                if not climate_entity:
+                    continue
 
-            if climate_entity in self._cooldown_until and now < self._cooldown_until[climate_entity]:
-                continue
+                auto = appliance.get("automation") or {}
+                heat_threshold = float(auto.get("heat_threshold_c", 18))
+                cool_threshold = float(auto.get("cool_threshold_c", 26))
+                seasonal_mode = auto.get("seasonal_mode", SEASONAL_MODE_OUTDOOR_TEMP)
+                outdoor_sensor = (auto.get("outdoor_temp_sensor") or "").strip()
+                cool_only_above = float(auto.get("outdoor_cool_only_above_c", 25))
+                heat_only_below = float(auto.get("outdoor_heat_only_below_c", 15))
+                winter_start = (auto.get("date_winter_start") or "11-01").strip()
+                winter_end = (auto.get("date_winter_end") or "03-31").strip()
 
-            target_mode: str | None = None
-            if indoor_temp < heat_threshold and heat_allowed:
-                target_mode = "heat"
-            elif indoor_temp > cool_threshold and cool_allowed:
-                target_mode = "cool"
-            else:
-                target_mode = "off"
+                outdoor_temp: float | None = None
+                if outdoor_sensor:
+                    ostate = self.hass.states.get(outdoor_sensor)
+                    if ostate and ostate.state not in ("unknown", "unavailable"):
+                        ounit = ostate.attributes.get("unit_of_measurement")
+                        outdoor_temp = _parse_temp(ostate.state, ounit)
 
-            if target_mode != current_mode and target_mode is not None:
-                await self._set_climate_mode(
-                    climate_entity,
-                    target_mode,
-                    room.get("name", ""),
+                heat_allowed = True
+                cool_allowed = True
+                if seasonal_mode == SEASONAL_MODE_OUTDOOR_TEMP and outdoor_temp is not None:
+                    if outdoor_temp < heat_only_below:
+                        cool_allowed = False
+                    elif outdoor_temp > cool_only_above:
+                        heat_allowed = False
+                elif seasonal_mode == SEASONAL_MODE_DATE:
+                    if _is_winter_date(winter_start, winter_end):
+                        cool_allowed = False
+                    else:
+                        heat_allowed = False
+
+                climate_state = self.hass.states.get(climate_entity)
+                current_mode = (
+                    (climate_state.attributes.get("hvac_mode") or "off")
+                    if climate_state
+                    else "off"
                 )
-                self._last_mode[climate_entity] = target_mode
-                self._cooldown_until[climate_entity] = now + self._COOLDOWN_SEC
 
-    async def _set_climate_mode(
-        self, entity_id: str, mode: str, room_name: str
-    ) -> None:
+                if climate_entity in self._cooldown_until and now < self._cooldown_until[climate_entity]:
+                    continue
+
+                target_mode: str | None = None
+                if indoor_temp < heat_threshold and heat_allowed:
+                    target_mode = "heat"
+                elif indoor_temp > cool_threshold and cool_allowed:
+                    target_mode = "cool"
+                else:
+                    target_mode = "off"
+
+                if target_mode != current_mode and target_mode is not None:
+                    await self._set_climate_mode(climate_entity, target_mode)
+                    self._last_mode[climate_entity] = target_mode
+                    self._cooldown_until[climate_entity] = now + self._COOLDOWN_SEC
+
+    async def _set_climate_mode(self, entity_id: str, mode: str) -> None:
         """Set climate mode and optionally announce via TTS."""
         try:
             if mode == "off":
@@ -175,28 +179,15 @@ class ClimateMonitor:
                     blocking=True,
                 )
 
-            tts_settings = self.config_manager.tts_settings
-            media_player = (tts_settings.get("media_player") or "").strip()
-            if media_player:
-                from .tts_queue import async_send_tts_or_queue
+            from .tts_event import async_send_tts_for_event
 
-                prefix = tts_settings.get("prefix", "Message from Home Climate.")
-                msg_template = tts_settings.get(
-                    "mode_change_msg",
-                    "{prefix} {room_name} climate set to {mode}",
-                )
-                message = msg_template.format(
-                    prefix=prefix,
-                    room_name=room_name or "Room",
-                    mode=mode,
-                )
-                await async_send_tts_or_queue(
-                    self.hass,
-                    media_player=media_player,
-                    message=message,
-                    language=tts_settings.get("language"),
-                    volume=tts_settings.get("volume"),
-                )
+            await async_send_tts_for_event(
+                self.hass,
+                self.config_manager,
+                entity_id,
+                TTS_MODE_CHANGE,
+                mode=mode,
+            )
         except Exception as e:
             _LOGGER.error("Failed to set climate %s to %s: %s", entity_id, mode, e)
 

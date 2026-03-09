@@ -7,7 +7,7 @@ const STYLES = `
   :host {
     display: block;
     height: 100%;
-    background: linear-gradient(165deg, #060d18 0%, #0a1628 35%, #0e2942 70%, #132f4c 100%);
+    background: #0a1628;
     color: #e8eef3;
     font-family: 'Inter', 'Roboto', 'Segoe UI', -apple-system, sans-serif;
     --accent: #5b8def;
@@ -27,9 +27,8 @@ const STYLES = `
     align-items: center;
     justify-content: space-between;
     padding: clamp(14px, 3vw, 22px) clamp(18px, 4vw, 28px);
-    background: rgba(6, 13, 24, 0.85);
+    background: #0a1628;
     border-bottom: 1px solid var(--card-border);
-    backdrop-filter: blur(16px);
     margin: calc(-1 * clamp(12px, 2.5vw, 24px)) calc(-1 * clamp(12px, 2.5vw, 24px)) clamp(16px, 2.5vw, 24px);
   }
   .header-left {
@@ -84,11 +83,14 @@ const STYLES = `
     gap: clamp(16px, 3vw, 24px);
   }
   .room-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
     background: var(--card-bg);
     border-radius: clamp(14px, 3vw, 18px);
     border: 1px solid var(--card-border);
     padding: clamp(18px, 3.5vw, 24px);
-    backdrop-filter: blur(12px);
     transition: box-shadow 0.25s, transform 0.2s;
   }
   .room-card:hover {
@@ -102,14 +104,92 @@ const STYLES = `
     letter-spacing: 0.06em;
     opacity: 0.95;
   }
+  .temp-wheel-wrap {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    margin: 0 0 clamp(8px, 2vw, 12px);
+  }
+  .temp-wheel-svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-135deg);
+  }
+  .temp-wheel-track {
+    fill: none;
+    stroke: rgba(255,255,255,0.12);
+    stroke-width: 10;
+  }
+  .temp-wheel-fill {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 10;
+    stroke-linecap: round;
+    transition: stroke-dasharray 0.15s;
+  }
+  .temp-wheel-knob {
+    fill: var(--accent);
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  .temp-wheel-knob:hover { fill: var(--accent-hover); }
+  .temp-wheel-inner {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .temp-wheel-target {
+    font-size: clamp(28px, 5vw, 36px);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .temp-wheel-mode {
+    font-size: clamp(10px, 1.8vw, 11px);
+    opacity: 0.75;
+    text-transform: capitalize;
+  }
+  .temp-wheel-room {
+    font-size: clamp(11px, 2vw, 12px);
+    opacity: 0.7;
+    margin-top: 2px;
+  }
+  .temp-buttons {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: clamp(12px, 2vw, 16px);
+  }
+  .temp-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--card-border);
+    background: rgba(255,255,255,0.04);
+    color: inherit;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  .temp-btn:hover { background: rgba(255,255,255,0.1); }
   .room-stats {
     display: flex;
+    justify-content: center;
     gap: clamp(20px, 4vw, 28px);
     margin-bottom: clamp(12px, 2vw, 16px);
   }
   .room-stat {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 10px;
   }
   .stat-icon {
@@ -134,8 +214,21 @@ const STYLES = `
   .room-state-row {
     display: flex;
     flex-wrap: wrap;
+    justify-content: center;
     gap: 8px;
     margin-bottom: clamp(12px, 2vw, 16px);
+  }
+  .fan-controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: clamp(8px, 1.5vw, 12px);
+  }
+  .fan-btn {
+    padding: 6px 12px;
+    font-size: 11px;
+    text-transform: capitalize;
   }
   .state-badge {
     font-size: 11px;
@@ -155,6 +248,7 @@ const STYLES = `
   .room-controls {
     display: flex;
     flex-wrap: wrap;
+    justify-content: center;
     gap: 10px;
     margin-top: clamp(10px, 2vw, 14px);
   }
@@ -402,26 +496,57 @@ class HomeWeatherPanel extends HTMLElement {
       addRoomBtn.addEventListener("click", () => {
         this._config = this._config || {};
         this._config.rooms = this._config.rooms || [];
-        this._config.rooms.push({ id: crypto.randomUUID(), name: "", climate_entity: "", temp_sensor: "", humidity_sensor: "" });
+        this._config.rooms.push({
+          id: crypto.randomUUID(),
+          name: "",
+          temp_sensor: "",
+          humidity_sensor: "",
+          media_player: "",
+          volume: 0.7,
+          tts_overrides: {},
+          appliances: [],
+        });
         this._render();
       });
     }
 
-    const addPresenceRuleBtn = root.querySelector("[data-action='add-presence-rule']");
-    if (addPresenceRuleBtn) {
-      addPresenceRuleBtn.addEventListener("click", () => {
-        this._config = this._config || {};
-        this._config.presence_rules = this._config.presence_rules || [];
-        this._config.presence_rules.push({ person: "", zone: "", climate_entity: "", enter_duration_sec: 30, exit_duration_sec: 300 });
+    root.querySelectorAll("[data-action='add-appliance']").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const roomIndex = parseInt(e.currentTarget.dataset.roomIndex, 10);
+        const rooms = this._config?.rooms || [];
+        const room = rooms[roomIndex];
+        if (!room) return;
+        room.appliances = room.appliances || [];
+        room.appliances.push({
+          id: crypto.randomUUID(),
+          device_type: "minisplit",
+          custom_name: "",
+          climate_entity: "",
+          automation: {
+            person: "",
+            zone: "",
+            enter_duration_sec: 30,
+            exit_duration_sec: 300,
+            target_temp_on_enter: 22,
+            heat_threshold_c: 18,
+            cool_threshold_c: 26,
+            seasonal_mode: "outdoor_temp",
+            outdoor_temp_sensor: "",
+            date_winter_start: "11-01",
+            date_winter_end: "03-31",
+            outdoor_cool_only_above_c: 25,
+            outdoor_heat_only_below_c: 15,
+          },
+        });
         this._render();
       });
-    }
+    });
 
     this._bindRoomControls(root);
   }
 
   _renderDashboard() {
-    const rooms = this._dashboardData?.rooms || this._config?.rooms || [];
+    const rooms = this._dashboardData?.rooms || [];
     if (rooms.length === 0) {
       return `
         <div class="empty-state">
@@ -447,6 +572,59 @@ class HomeWeatherPanel extends HTMLElement {
     return labels[action] || (action || "—");
   }
 
+  _modeLabel(mode) {
+    const labels = { heat: "Heat", cool: "Cool", dry: "Dehumidifier", fan_only: "Fan Only", off: "Off" };
+    return labels[mode] || mode;
+  }
+
+  _allowedModes(hvacModes) {
+    const exclude = new Set(["heat_cool", "auto"]);
+    const allowed = ["heat", "cool", "dry", "fan_only", "off"];
+    if (hvacModes && hvacModes.length > 0) {
+      return allowed.filter((m) => hvacModes.includes(m) && !exclude.has(m));
+    }
+    return allowed;
+  }
+
+  _renderTempWheel(room) {
+    const minT = room.min_temp ?? 16;
+    const maxT = room.max_temp ?? 30;
+    const target = room.target_temp != null ? Math.round(room.target_temp) : Math.round((minT + maxT) / 2);
+    const range = maxT - minT || 1;
+    const norm = Math.max(0, Math.min(1, (target - minT) / range));
+    const unit = (room.temperature_unit || "°C").replace("°", "").toUpperCase() === "F" ? "°F" : "°C";
+    const roomTemp = room.temp != null ? room.temp.toFixed(1) : "—";
+    const mode = room.climate_mode || "off";
+
+    const r = 45;
+    const circum = 2 * Math.PI * r;
+    const arcLen = circum * 0.75;
+    const dashLen = norm * arcLen;
+    const dashOffset = circum * 0.375;
+
+    const knobAngle = -135 + 270 * norm;
+    const rad = (knobAngle * Math.PI) / 180;
+    const knobX = 50 + r * Math.cos(rad);
+    const knobY = 50 + r * Math.sin(rad);
+
+    const modeLabel = mode !== "off" ? this._modeLabel(mode) : "";
+
+    return `
+      <div class="temp-wheel-wrap" data-entity="${this._escapeHtml(room.climate_entity || "")}" data-room-name="${this._escapeHtml(room.name || "Room")}" data-min="${minT}" data-max="${maxT}" data-target="${target}">
+        <svg class="temp-wheel-svg" viewBox="0 0 100 100" aria-hidden="true">
+          <circle class="temp-wheel-track" cx="50" cy="50" r="${r}" />
+          <circle class="temp-wheel-fill" cx="50" cy="50" r="${r}" stroke-dasharray="${dashLen} 500" stroke-dashoffset="${-dashOffset}" />
+          <circle class="temp-wheel-knob" cx="${knobX}" cy="${knobY}" r="6" data-wheel-knob />
+        </svg>
+        <div class="temp-wheel-inner">
+          <span class="temp-wheel-target">${target}${unit}</span>
+          ${modeLabel ? `<span class="temp-wheel-mode">${modeLabel}</span>` : ""}
+          <span class="temp-wheel-room">Room − ${roomTemp}${unit}</span>
+        </div>
+      </div>
+    `;
+  }
+
   _renderRoomCard(room) {
     const temp = room.temp != null ? room.temp.toFixed(1) : "—";
     const humidity = room.humidity != null ? room.humidity.toFixed(0) : "—";
@@ -454,25 +632,41 @@ class HomeWeatherPanel extends HTMLElement {
     const mode = room.climate_mode || "off";
     const hvacAction = room.hvac_action || null;
     const fanMode = room.fan_mode || null;
-    const hasClimate = !!room.climate_entity;
+    const hasClimate = !!(room.climate_entity && !room.is_monitor_only);
     const roomName = room.name || "Room";
+    const unit = (room.temperature_unit || "°C").replace("°", "").toUpperCase() === "F" ? "°F" : "°C";
+    const minT = room.min_temp ?? 16;
+    const maxT = room.max_temp ?? 30;
+    const allowedModes = this._allowedModes(room.hvac_modes);
+    const fanModes = room.fan_modes || [];
 
     const tempIcon = `<svg class="stat-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15 13V5c0-1.66-1.34-3-3-3S9 3.34 9 5v8c-1.21.91-2 2.37-2 4 0 2.76 2.24 5 5 5s5-2.24 5-5c0-1.63-.79-3.09-2-4zm-4-8c0-.55.45-1 1-1s1 .45 1 1h-1v1h1v2h-1v1h1v2h-2v-6z"/></svg>`;
     const humidityIcon = `<svg class="stat-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`;
     const heatIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M13.5 1.67c.74 0 1.33.6 1.33 1.33 0 .67-.47 1.2-1.1 1.32L12 4.5 9.6 4.08c-.63-.12-1.1-.65-1.1-1.32 0-.73.59-1.33 1.33-1.33H13.5zM6 22.67c0 .73.59 1.33 1.33 1.33h9.34c.74 0 1.33-.6 1.33-1.33V12h-12v10.67zM14 14v6.67h-4V14h4z"/></svg>`;
     const coolIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M22 11h-4.17l3.24-3.24-1.41-1.41L16 9.34V5h-2v4.34l-3.83-3.83-1.41 1.41L10.17 11H6v2h4.17l-3.24 3.24 1.41 1.41L14 14.66V19h2v-4.34l3.83 3.83 1.41-1.41L17.83 13H22z"/></svg>`;
+    const dryIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`;
+    const fanIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-12c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>`;
     const offIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M18 14.49V9c0-1.1-.9-2-2-2h-3.15l-1.6-1.6L10 7h4v2H6v2h8v2H6v2h8v2H6v2h10c1.1 0 2-.9 2-2v-5.51l2 2z"/></svg>`;
-    const onIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>`;
+
+    const modeIcons = { heat: heatIcon, cool: coolIcon, dry: dryIcon, fan_only: fanIcon, off: offIcon };
+    const currentTarget = room.target_temp != null ? room.target_temp : (minT + maxT) / 2;
 
     return `
       <div class="room-card" data-room-id="${this._escapeHtml(room.id || "")}">
         <h3 class="room-name">${this._escapeHtml(roomName)}</h3>
+        ${hasClimate ? this._renderTempWheel(room) : ""}
+        ${hasClimate ? `
+          <div class="temp-buttons">
+            <button class="temp-btn" data-action="temp-down" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}" data-min="${minT}" data-max="${maxT}" data-target="${currentTarget}">−</button>
+            <button class="temp-btn" data-action="temp-up" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}" data-min="${minT}" data-max="${maxT}" data-target="${currentTarget}">+</button>
+          </div>
+        ` : ""}
         <div class="room-stats">
           <div class="room-stat">
             ${tempIcon}
             <div class="room-stat-inner">
               <span class="room-stat-value">${temp}</span>
-              <span class="room-stat-unit">°C</span>
+              <span class="room-stat-unit">${unit}</span>
             </div>
           </div>
           <div class="room-stat">
@@ -484,20 +678,55 @@ class HomeWeatherPanel extends HTMLElement {
           </div>
         </div>
         <div class="room-state-row">
-          ${targetTemp != null ? `<span class="state-badge">Target: ${targetTemp} °C</span>` : ""}
-          ${hvacAction ? `<span class="state-badge state-action">${this._hvacActionLabel(hvacAction)}</span>` : ""}
-          ${fanMode ? `<span class="state-badge state-fan">Fan: ${this._escapeHtml(fanMode)}</span>` : ""}
+          ${room.is_monitor_only ? `<span class="state-badge">Monitor</span>` : ""}
+          ${!room.is_monitor_only && hvacAction ? `<span class="state-badge state-action">${this._hvacActionLabel(hvacAction)}</span>` : ""}
+          ${!room.is_monitor_only && fanMode ? `<span class="state-badge state-fan">Fan: ${this._escapeHtml(fanMode)}</span>` : ""}
         </div>
         ${hasClimate ? `
           <div class="room-controls">
-            <button class="ctrl-btn ${mode !== "off" ? "active" : ""}" data-action="on" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}">${onIcon}<span>ON</span></button>
-            <button class="ctrl-btn ${mode === "heat" ? "active" : ""}" data-action="heat" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}">${heatIcon}<span>HEAT</span></button>
-            <button class="ctrl-btn ${mode === "cool" ? "active" : ""}" data-action="cool" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}">${coolIcon}<span>COOL</span></button>
-            <button class="ctrl-btn ${mode === "off" ? "active" : ""}" data-action="off" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}">${offIcon}<span>OFF</span></button>
+            ${allowedModes.map((m) => `
+              <button class="ctrl-btn ${mode === m ? "active" : ""}" data-action="mode" data-hvac-mode="${m}" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}">${modeIcons[m] || offIcon}<span>${this._modeLabel(m)}</span></button>
+            `).join("")}
           </div>
+          ${fanModes.length > 0 ? `
+            <div class="fan-controls">
+              ${fanModes.map((fm) => `
+                <button class="ctrl-btn fan-btn ${fanMode === fm ? "active" : ""}" data-action="fan" data-fan-mode="${this._escapeHtml(fm)}" data-entity="${this._escapeHtml(room.climate_entity)}">${fm}</button>
+              `).join("")}
+            </div>
+          ` : ""}
         ` : ""}
       </div>
     `;
+  }
+
+  async _setTemperature(entityId, temperature, roomName) {
+    if (!this._hass || !entityId) return;
+    try {
+      await this._hass.callWS({
+        type: "home_climate/set_temperature",
+        entity_id: entityId,
+        temperature: parseFloat(temperature),
+        room_name: roomName || "Room",
+      });
+      await this._loadDashboardData();
+    } catch (e) {
+      console.error("Set temperature error:", e);
+    }
+  }
+
+  async _setFanMode(entityId, fanMode) {
+    if (!this._hass || !entityId) return;
+    try {
+      await this._hass.callWS({
+        type: "home_climate/set_fan_mode",
+        entity_id: entityId,
+        fan_mode: fanMode,
+      });
+      await this._loadDashboardData();
+    } catch (e) {
+      console.error("Set fan mode error:", e);
+    }
   }
 
   _bindRoomControls(root) {
@@ -506,23 +735,110 @@ class HomeWeatherPanel extends HTMLElement {
         const entity = e.currentTarget.dataset.entity;
         const action = e.currentTarget.dataset.action;
         const roomName = e.currentTarget.dataset.roomName || "Room";
-        if (!entity) return;
-        if (action === "off") {
-          this._setClimateAndAnnounce(entity, "turn_off", "off", roomName);
-        } else if (action === "on") {
-          this._setClimateAndAnnounce(entity, "turn_on", "on", roomName);
-        } else if (action === "heat" || action === "cool") {
-          this._setClimateAndAnnounce(entity, "set_hvac_mode", action, roomName);
+        if (!entity && action !== "fan") return;
+        if (action === "mode") {
+          const hvacMode = e.currentTarget.dataset.hvacMode;
+          if (hvacMode === "off") {
+            this._setClimateAndAnnounce(entity, "turn_off", "off", roomName);
+          } else {
+            this._setClimateAndAnnounce(entity, "set_hvac_mode", hvacMode, roomName);
+          }
+        } else if (action === "fan") {
+          const fanMode = e.currentTarget.dataset.fanMode;
+          this._setFanMode(entity, fanMode);
         }
+      });
+    });
+
+    root.querySelectorAll(".temp-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const entity = e.currentTarget.dataset.entity;
+        const action = e.currentTarget.dataset.action;
+        const roomName = e.currentTarget.dataset.roomName || "Room";
+        if (!entity) return;
+        const minT = parseFloat(e.currentTarget.dataset.min) || 16;
+        const maxT = parseFloat(e.currentTarget.dataset.max) || 30;
+        let target = parseFloat(e.currentTarget.dataset.target) || (minT + maxT) / 2;
+        const step = 1;
+        if (action === "temp-down") target = Math.max(minT, target - step);
+        else if (action === "temp-up") target = Math.min(maxT, target + step);
+        this._setTemperature(entity, target, roomName);
+      });
+    });
+
+    root.querySelectorAll(".temp-wheel-wrap").forEach((wrap) => {
+      const entity = wrap.dataset.entity;
+      const roomName = wrap.dataset.roomName || "Room";
+      const minT = parseFloat(wrap.dataset.min) || 16;
+      const maxT = parseFloat(wrap.dataset.max) || 30;
+      if (!entity) return;
+      const svg = wrap.querySelector(".temp-wheel-svg");
+      const knob = wrap.querySelector(".temp-wheel-knob");
+
+      const getNormFromEvent = (e) => {
+        const rect = svg.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const x = (e.clientX || e.touches?.[0]?.clientX) - cx;
+        const y = (e.clientY || e.touches?.[0]?.clientY) - cy;
+        const clickAngle = (Math.atan2(y, x) * 180) / Math.PI;
+        const ourAngle = clickAngle + 135;
+        return Math.max(0, Math.min(1, ourAngle / 270));
+      };
+
+      const normToTemp = (norm) => Math.round(minT + norm * (maxT - minT));
+
+      const handleSetTemp = (norm) => {
+        const temp = normToTemp(norm);
+        this._setTemperature(entity, temp, roomName);
+      };
+
+      const onDown = (e) => {
+        e.preventDefault();
+        const norm = getNormFromEvent(e);
+        handleSetTemp(norm);
+        const onMove = (ev) => {
+          ev.preventDefault();
+          handleSetTemp(getNormFromEvent(ev));
+        };
+        const onUp = () => {
+          document.removeEventListener("mousemove", onMove);
+          document.removeEventListener("mouseup", onUp);
+          document.removeEventListener("touchmove", onMove, { passive: false });
+          document.removeEventListener("touchend", onUp);
+        };
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp);
+        document.addEventListener("touchmove", onMove, { passive: false });
+        document.addEventListener("touchend", onUp);
+      };
+
+      knob?.addEventListener("mousedown", onDown);
+      knob?.addEventListener("touchstart", onDown, { passive: false });
+      svg?.addEventListener("click", (e) => {
+        if (e.target === knob) return;
+        const norm = getNormFromEvent(e);
+        handleSetTemp(norm);
       });
     });
   }
 
+  _ttsEventLabels() {
+    return {
+      manual_on: "Manual turn on",
+      manual_off: "Manual turn off",
+      mode_change: "Mode change",
+      temp_change: "Temperature change",
+      presence_enter: "Presence enter zone",
+      presence_leave: "Presence leave zone",
+      fan_change: "Fan speed change",
+    };
+  }
+
   _renderSettings() {
     const rooms = this._config?.rooms || [];
-    const automation = this._config?.automation || {};
-    const presenceRules = this._config?.presence_rules || [];
     const ttsSettings = this._config?.tts_settings || {};
+    const ttsMessages = ttsSettings.messages || {};
     const entities = this._entities || { climate: [], sensors: [], persons: [], zones: [], media_players: [] };
 
     const settingsStyles = `
@@ -534,6 +850,7 @@ class HomeWeatherPanel extends HTMLElement {
       .settings-tab-content.active { display: block; }
       .settings-card { background: var(--card-bg); border-radius: 12px; border: 1px solid var(--card-border); padding: 20px; margin-bottom: 16px; }
       .settings-card h3 { margin: 0 0 16px; font-size: 14px; }
+      .settings-card h4 { margin: 12px 0 8px; font-size: 12px; opacity: 0.9; }
       .form-group { margin-bottom: 14px; }
       .form-label { display: block; font-size: 12px; margin-bottom: 4px; opacity: 0.9; }
       .form-input, .form-select { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--card-border); background: rgba(0,0,0,0.2); color: inherit; font-size: 13px; }
@@ -542,16 +859,21 @@ class HomeWeatherPanel extends HTMLElement {
       .btn-save:hover { background: var(--accent-hover); }
       .btn-add { padding: 8px 14px; background: rgba(124,58,237,0.2); color: var(--accent); border: 1px solid var(--accent); border-radius: 8px; cursor: pointer; font-size: 12px; margin-bottom: 12px; }
       .btn-add:hover { background: var(--accent-dim); }
-      .rule-row, .room-row { padding: 12px; background: rgba(0,0,0,0.15); border-radius: 8px; margin-bottom: 10px; }
+      .room-row { padding: 16px; background: rgba(0,0,0,0.15); border-radius: 8px; margin-bottom: 14px; }
+      .appliance-card { padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--card-border); }
+      .tts-event-row { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+      .tts-event-row .form-input { flex: 1; min-width: 200px; }
+      .tts-toggle { min-width: 50px; }
     `;
+
+    const ttsEventKeys = ["manual_on", "manual_off", "mode_change", "temp_change", "presence_enter", "presence_leave", "fan_change"];
+    const labels = this._ttsEventLabels();
 
     return `
       <style>${settingsStyles}</style>
       <div class="settings-view">
         <div class="settings-tabs">
           <button class="settings-tab ${this._settingsTab === "rooms" ? "active" : ""}" data-tab="rooms">Rooms</button>
-          <button class="settings-tab ${this._settingsTab === "automation" ? "active" : ""}" data-tab="automation">Automation</button>
-          <button class="settings-tab ${this._settingsTab === "presence" ? "active" : ""}" data-tab="presence">Presence</button>
           <button class="settings-tab ${this._settingsTab === "tts" ? "active" : ""}" data-tab="tts">TTS</button>
         </div>
 
@@ -560,54 +882,8 @@ class HomeWeatherPanel extends HTMLElement {
             <h3>Rooms</h3>
             <button class="btn-add" data-action="add-room">+ Add Room</button>
             <div id="rooms-list">
-              ${rooms.length === 0 ? "<p style='opacity:0.7;'>No rooms. Add a room to map climate entities.</p>" : ""}
+              ${rooms.length === 0 ? "<p style='opacity:0.7;'>No rooms. Add a room to configure sensors and HVAC appliances.</p>" : ""}
               ${rooms.map((r, i) => this._renderRoomRow(r, i, entities)).join("")}
-            </div>
-          </div>
-        </div>
-
-        <div class="settings-tab-content ${this._settingsTab === "automation" ? "active" : ""}" id="tab-automation">
-          <div class="settings-card">
-            <h3>Thresholds & Seasonal Logic</h3>
-            <div class="form-group">
-              <label class="form-label">Heat below (°C)</label>
-              <input type="number" class="form-input" id="heat-threshold" value="${automation.heat_threshold_c ?? 18}" step="0.5" min="5" max="35">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Cool above (°C)</label>
-              <input type="number" class="form-input" id="cool-threshold" value="${automation.cool_threshold_c ?? 26}" step="0.5" min="15" max="40">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Seasonal mode</label>
-              <select class="form-select" id="seasonal-mode">
-                <option value="outdoor_temp" ${automation.seasonal_mode === "outdoor_temp" ? "selected" : ""}>Outdoor temperature</option>
-                <option value="date" ${automation.seasonal_mode === "date" ? "selected" : ""}>Date-based</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Outdoor temp sensor</label>
-              <select class="form-select" id="outdoor-sensor">
-                <option value="">— None —</option>
-                ${(entities.sensors || []).filter(s => (s.unit || "").includes("°") || (s.unit || "").toLowerCase().includes("c")).map(s => `<option value="${s.entity_id}" ${automation.outdoor_temp_sensor === s.entity_id ? "selected" : ""}>${this._escapeHtml(s.friendly_name || s.entity_id)}</option>`).join("")}
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Winter start (MM-DD)</label>
-              <input type="text" class="form-input" id="winter-start" value="${automation.date_winter_start || "11-01"}" placeholder="11-01">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Winter end (MM-DD)</label>
-              <input type="text" class="form-input" id="winter-end" value="${automation.date_winter_end || "03-31"}" placeholder="03-31">
-            </div>
-          </div>
-        </div>
-
-        <div class="settings-tab-content ${this._settingsTab === "presence" ? "active" : ""}" id="tab-presence">
-          <div class="settings-card">
-            <h3>Presence Rules (turn on when entering, off when exiting)</h3>
-            <button class="btn-add" data-action="add-presence-rule">+ Add Rule</button>
-            <div id="presence-rules-list">
-              ${presenceRules.map((r, i) => this._renderPresenceRuleRow(r, i, entities)).join("")}
             </div>
           </div>
         </div>
@@ -616,20 +892,24 @@ class HomeWeatherPanel extends HTMLElement {
           <div class="settings-card">
             <h3>TTS Settings</h3>
             <div class="form-group">
-              <label class="form-label">Media player</label>
-              <select class="form-select" id="tts-media-player">
-                <option value="">— None —</option>
-                ${(entities.media_players || []).map(m => `<option value="${m.entity_id}" ${ttsSettings.media_player === m.entity_id ? "selected" : ""}>${this._escapeHtml(m.friendly_name || m.entity_id)}</option>`).join("")}
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Prefix</label>
+              <label class="form-label">Global prefix</label>
               <input type="text" class="form-input" id="tts-prefix" value="${this._escapeHtml(ttsSettings.prefix || "Message from Home Climate.")}">
             </div>
             <div class="form-group">
-              <label class="form-label">Volume (0-1)</label>
-              <input type="number" class="form-input" id="tts-volume" value="${ttsSettings.volume ?? 0.7}" step="0.1" min="0" max="1">
+              <label class="form-label">Language</label>
+              <input type="text" class="form-input" id="tts-language" value="${this._escapeHtml(ttsSettings.language || "en")}" placeholder="en">
             </div>
+            <h4>Message templates (variables: {prefix}, {room_name}, {device_name}, {device_type}, {mode}, {temp}, {fan_mode})</h4>
+            ${ttsEventKeys.map((key) => {
+              const entry = ttsMessages[key] || { enabled: true, template: "" };
+              return `
+              <div class="tts-event-row" data-tts-key="${key}">
+                <label class="form-label" style="min-width:120px;">${labels[key] || key}</label>
+                <input type="text" class="form-input" data-field="template" value="${this._escapeHtml(entry.template || "")}" placeholder="e.g. {prefix} {room_name} {device_name} turned on">
+                <label class="form-label" style="margin:0;">Enable</label>
+                <input type="checkbox" class="tts-toggle" data-field="enabled" ${entry.enabled !== false ? "checked" : ""}>
+              </div>`;
+            }).join("")}
           </div>
         </div>
 
@@ -643,20 +923,22 @@ class HomeWeatherPanel extends HTMLElement {
 
   _renderRoomRow(room, index, entities) {
     const roomId = room.id || crypto.randomUUID();
-    const climateOpts = (entities.climate || []).map(c => `<option value="${c.entity_id}" ${room.climate_entity === c.entity_id ? "selected" : ""}>${this._escapeHtml(c.friendly_name || c.entity_id)}</option>`).join("");
     const tempSensorOpts = (entities.sensors || []).map(s => `<option value="${s.entity_id}" ${room.temp_sensor === s.entity_id ? "selected" : ""}>${this._escapeHtml(s.friendly_name || s.entity_id)}</option>`).join("");
     const humiditySensorOpts = (entities.sensors || []).map(s => `<option value="${s.entity_id}" ${room.humidity_sensor === s.entity_id ? "selected" : ""}>${this._escapeHtml(s.friendly_name || s.entity_id)}</option>`).join("");
+    const mediaOpts = (entities.media_players || []).map(m => `<option value="${m.entity_id}" ${room.media_player === m.entity_id ? "selected" : ""}>${this._escapeHtml(m.friendly_name || m.entity_id)}</option>`).join("");
+    const deviceTypes = [
+      { value: "heater", label: "Heater" },
+      { value: "ac", label: "AC" },
+      { value: "minisplit", label: "Minisplit" },
+      { value: "dehumidifier", label: "Dehumidifier" },
+    ];
+    const appliances = room.appliances || [];
+
     return `
       <div class="room-row" data-room-index="${index}" data-room-id="${this._escapeHtml(roomId)}">
         <div class="form-group">
           <label class="form-label">Room name</label>
           <input type="text" class="form-input" data-field="name" value="${this._escapeHtml(room.name || "")}" placeholder="e.g. Bedroom">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Climate entity</label>
-          <select class="form-select" data-field="climate_entity">
-            <option value="">— None —</option>${climateOpts}
-          </select>
         </div>
         <div class="form-group">
           <label class="form-label">Temp sensor</label>
@@ -670,35 +952,110 @@ class HomeWeatherPanel extends HTMLElement {
             <option value="">— None —</option>${humiditySensorOpts}
           </select>
         </div>
+        <div class="form-group">
+          <label class="form-label">Media player (for TTS)</label>
+          <select class="form-select" data-field="media_player">
+            <option value="">— None —</option>${mediaOpts}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Volume (0-1)</label>
+          <input type="number" class="form-input" data-field="volume" value="${room.volume ?? 0.7}" step="0.1" min="0" max="1">
+        </div>
+        <h4>HVAC Appliances</h4>
+        <button class="btn-add" data-action="add-appliance" data-room-index="${index}">+ Add appliance</button>
+        <div class="appliances-list">
+          ${appliances.map((app, ai) => this._renderApplianceCard(room, app, ai, index, entities)).join("")}
+        </div>
       </div>
     `;
   }
 
-  _renderPresenceRuleRow(rule, index, entities) {
-    const personOpts = (entities.persons || []).map(p => `<option value="${p.entity_id}" ${rule.person === p.entity_id ? "selected" : ""}>${this._escapeHtml(p.friendly_name || p.entity_id)}</option>`).join("");
-    const zoneOpts = (entities.zones || []).map(z => `<option value="${z.entity_id}" ${rule.zone === z.entity_id ? "selected" : ""}>${this._escapeHtml(z.friendly_name || z.entity_id)}</option>`).join("");
-    const climateOpts = (entities.climate || []).map(c => `<option value="${c.entity_id}" ${rule.climate_entity === c.entity_id ? "selected" : ""}>${this._escapeHtml(c.friendly_name || c.entity_id)}</option>`).join("");
+  _renderApplianceCard(room, app, appIndex, roomIndex, entities) {
+    const deviceTypes = [
+      { value: "heater", label: "Heater" },
+      { value: "ac", label: "AC" },
+      { value: "minisplit", label: "Minisplit" },
+      { value: "dehumidifier", label: "Dehumidifier" },
+    ];
+    const climateOpts = (entities.climate || []).map(c => `<option value="${c.entity_id}" ${app.climate_entity === c.entity_id ? "selected" : ""}>${this._escapeHtml(c.friendly_name || c.entity_id)}</option>`).join("");
+    const personOpts = (entities.persons || []).map(p => `<option value="${p.entity_id}" ${(app.automation?.person || "") === p.entity_id ? "selected" : ""}>${this._escapeHtml(p.friendly_name || p.entity_id)}</option>`).join("");
+    const zoneOpts = (entities.zones || []).map(z => `<option value="${z.entity_id}" ${(app.automation?.zone || "") === z.entity_id ? "selected" : ""}>${this._escapeHtml(z.friendly_name || z.entity_id)}</option>`).join("");
+    const sensorOpts = (entities.sensors || []).filter(s => (s.unit || "").includes("°") || (s.unit || "").toLowerCase().includes("c")).map(s => `<option value="${s.entity_id}" ${(app.automation?.outdoor_temp_sensor || "") === s.entity_id ? "selected" : ""}>${this._escapeHtml(s.friendly_name || s.entity_id)}</option>`).join("");
+    const auto = app.automation || {};
+
     return `
-      <div class="rule-row" data-rule-index="${index}">
+      <div class="appliance-card" data-room-index="${roomIndex}" data-app-index="${appIndex}">
         <div class="form-group">
-          <label class="form-label">Person</label>
-          <select class="form-select" data-field="person"><option value="">— Select —</option>${personOpts}</select>
+          <label class="form-label">Device type</label>
+          <select class="form-select" data-field="device_type">
+            ${deviceTypes.map(d => `<option value="${d.value}" ${app.device_type === d.value ? "selected" : ""}>${d.label}</option>`).join("")}
+          </select>
         </div>
         <div class="form-group">
-          <label class="form-label">Zone</label>
-          <select class="form-select" data-field="zone"><option value="">— Select —</option>${zoneOpts}</select>
+          <label class="form-label">Custom name (optional)</label>
+          <input type="text" class="form-input" data-field="custom_name" value="${this._escapeHtml(app.custom_name || "")}" placeholder="e.g. Samsung Minisplit">
         </div>
         <div class="form-group">
           <label class="form-label">Climate entity</label>
-          <select class="form-select" data-field="climate_entity"><option value="">— Select —</option>${climateOpts}</select>
+          <select class="form-select" data-field="climate_entity">
+            <option value="">— None —</option>${climateOpts}
+          </select>
+        </div>
+        <h4 style="margin-top:12px;">Automation (enter/leave zone)</h4>
+        <div class="form-group">
+          <label class="form-label">Person</label>
+          <select class="form-select" data-field="person">
+            <option value="">— None —</option>${personOpts}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Zone</label>
+          <select class="form-select" data-field="zone">
+            <option value="">— None —</option>${zoneOpts}
+          </select>
         </div>
         <div class="form-group">
           <label class="form-label">Enter duration (sec)</label>
-          <input type="number" class="form-input" data-field="enter_duration_sec" value="${rule.enter_duration_sec ?? 30}" min="0">
+          <input type="number" class="form-input" data-field="enter_duration_sec" value="${auto.enter_duration_sec ?? 30}" min="0">
         </div>
         <div class="form-group">
           <label class="form-label">Exit duration (sec)</label>
-          <input type="number" class="form-input" data-field="exit_duration_sec" value="${rule.exit_duration_sec ?? 300}" min="0">
+          <input type="number" class="form-input" data-field="exit_duration_sec" value="${auto.exit_duration_sec ?? 300}" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Target temp on enter (°C)</label>
+          <input type="number" class="form-input" data-field="target_temp_on_enter" value="${auto.target_temp_on_enter ?? 22}" step="0.5">
+        </div>
+        <h4 style="margin-top:12px;">Thresholds</h4>
+        <div class="form-group">
+          <label class="form-label">Heat below (°C)</label>
+          <input type="number" class="form-input" data-field="heat_threshold_c" value="${auto.heat_threshold_c ?? 18}" step="0.5">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cool above (°C)</label>
+          <input type="number" class="form-input" data-field="cool_threshold_c" value="${auto.cool_threshold_c ?? 26}" step="0.5">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Seasonal mode</label>
+          <select class="form-select" data-field="seasonal_mode">
+            <option value="outdoor_temp" ${auto.seasonal_mode === "outdoor_temp" ? "selected" : ""}>Outdoor temperature</option>
+            <option value="date" ${auto.seasonal_mode === "date" ? "selected" : ""}>Date-based</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Outdoor temp sensor</label>
+          <select class="form-select" data-field="outdoor_temp_sensor">
+            <option value="">— None —</option>${sensorOpts}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Winter start (MM-DD)</label>
+          <input type="text" class="form-input" data-field="date_winter_start" value="${auto.date_winter_start || "11-01"}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Winter end (MM-DD)</label>
+          <input type="text" class="form-input" data-field="date_winter_end" value="${auto.date_winter_end || "03-31"}">
         </div>
       </div>
     `;
@@ -711,65 +1068,90 @@ class HomeWeatherPanel extends HTMLElement {
 
     const roomRows = root.querySelectorAll(".room-row");
     config.rooms = [];
-    roomRows.forEach((row) => {
+    for (let i = 0; i < roomRows.length; i++) {
+      const row = roomRows[i];
       const name = row.querySelector("[data-field='name']")?.value?.trim();
-      if (!name) return;
+      if (!name) continue;
       const roomId = row.dataset.roomId || crypto.randomUUID();
-      const climateEl = row.querySelector("[data-field='climate_entity']");
       const tempEl = row.querySelector("[data-field='temp_sensor']");
       const humidityEl = row.querySelector("[data-field='humidity_sensor']");
+      const mediaEl = row.querySelector("[data-field='media_player']");
+      const volumeEl = row.querySelector("[data-field='volume']");
+
+      const appliances = [];
+      const acards = root.querySelectorAll(`.appliance-card[data-room-index="${i}"]`);
+      acards.forEach((acard) => {
+        const climateEl = acard.querySelector("[data-field='climate_entity']");
+        const deviceTypeEl = acard.querySelector("[data-field='device_type']");
+        const customNameEl = acard.querySelector("[data-field='custom_name']");
+        const personEl = acard.querySelector("[data-field='person']");
+        const zoneEl = acard.querySelector("[data-field='zone']");
+        const enterEl = acard.querySelector("[data-field='enter_duration_sec']");
+        const exitEl = acard.querySelector("[data-field='exit_duration_sec']");
+        const targetTempEl = acard.querySelector("[data-field='target_temp_on_enter']");
+        const heatEl = acard.querySelector("[data-field='heat_threshold_c']");
+        const coolEl = acard.querySelector("[data-field='cool_threshold_c']");
+        const seasonalEl = acard.querySelector("[data-field='seasonal_mode']");
+        const outdoorEl = acard.querySelector("[data-field='outdoor_temp_sensor']");
+        const winterStartEl = acard.querySelector("[data-field='date_winter_start']");
+        const winterEndEl = acard.querySelector("[data-field='date_winter_end']");
+
+        const existingRoom = this._config?.rooms?.[i];
+        const existingApps = existingRoom?.appliances || [];
+        const existingApp = existingApps[appliances.length];
+
+        appliances.push({
+          id: existingApp?.id || crypto.randomUUID(),
+          device_type: deviceTypeEl?.value || "minisplit",
+          custom_name: (customNameEl?.value || "").trim(),
+          climate_entity: (climateEl?.value || "").trim() || null,
+          automation: {
+            person: (personEl?.value || "").trim(),
+            zone: (zoneEl?.value || "").trim(),
+            enter_duration_sec: parseInt(enterEl?.value, 10) || 30,
+            exit_duration_sec: parseInt(exitEl?.value, 10) || 300,
+            target_temp_on_enter: parseFloat(targetTempEl?.value) || 22,
+            heat_threshold_c: parseFloat(heatEl?.value) || 18,
+            cool_threshold_c: parseFloat(coolEl?.value) || 26,
+            seasonal_mode: seasonalEl?.value || "outdoor_temp",
+            outdoor_temp_sensor: (outdoorEl?.value || "").trim(),
+            date_winter_start: (winterStartEl?.value || "11-01").trim(),
+            date_winter_end: (winterEndEl?.value || "03-31").trim(),
+          },
+        });
+      });
+
       config.rooms.push({
         id: roomId,
         name,
-        climate_entity: climateEl?.value || null,
-        temp_sensor: tempEl?.value || null,
-        humidity_sensor: humidityEl?.value || null,
+        temp_sensor: (tempEl?.value || "").trim() || null,
+        humidity_sensor: (humidityEl?.value || "").trim() || null,
+        media_player: (mediaEl?.value || "").trim() || "",
+        volume: parseFloat(volumeEl?.value) || 0.7,
+        tts_overrides: {},
+        appliances,
       });
-    });
+    }
 
-    const heatEl = root.querySelector("#heat-threshold");
-    const coolEl = root.querySelector("#cool-threshold");
-    const seasonalEl = root.querySelector("#seasonal-mode");
-    const outdoorEl = root.querySelector("#outdoor-sensor");
-    const winterStartEl = root.querySelector("#winter-start");
-    const winterEndEl = root.querySelector("#winter-end");
-    config.automation = {
-      ...config.automation,
-      heat_threshold_c: parseFloat(heatEl?.value) || 18,
-      cool_threshold_c: parseFloat(coolEl?.value) || 26,
-      seasonal_mode: seasonalEl?.value || "outdoor_temp",
-      outdoor_temp_sensor: outdoorEl?.value || "",
-      date_winter_start: winterStartEl?.value || "11-01",
-      date_winter_end: winterEndEl?.value || "03-31",
-    };
-
-    const ruleRows = root.querySelectorAll(".rule-row");
-    config.presence_rules = [];
-    ruleRows.forEach((row) => {
-      const person = row.querySelector("[data-field='person']")?.value;
-      const zone = row.querySelector("[data-field='zone']")?.value;
-      const climateEntity = row.querySelector("[data-field='climate_entity']")?.value;
-      const enterDur = row.querySelector("[data-field='enter_duration_sec']")?.value;
-      const exitDur = row.querySelector("[data-field='exit_duration_sec']")?.value;
-      if (!person || !zone || !climateEntity) return;
-      config.presence_rules.push({
-        person,
-        zone,
-        climate_entity: climateEntity,
-        enter_duration_sec: parseInt(enterDur, 10) || 30,
-        exit_duration_sec: parseInt(exitDur, 10) || 300,
-      });
-    });
-
-    const ttsMediaEl = root.querySelector("#tts-media-player");
     const ttsPrefixEl = root.querySelector("#tts-prefix");
-    const ttsVolumeEl = root.querySelector("#tts-volume");
+    const ttsLangEl = root.querySelector("#tts-language");
     config.tts_settings = {
       ...config.tts_settings,
-      media_player: ttsMediaEl?.value || "",
       prefix: ttsPrefixEl?.value || "Message from Home Climate.",
-      volume: parseFloat(ttsVolumeEl?.value) || 0.7,
+      language: (ttsLangEl?.value || "en").trim(),
+      messages: {},
     };
+
+    const ttsEventKeys = ["manual_on", "manual_off", "mode_change", "temp_change", "presence_enter", "presence_leave", "fan_change"];
+    ttsEventKeys.forEach((key) => {
+      const row = root.querySelector(`[data-tts-key="${key}"]`);
+      const templateEl = row?.querySelector("[data-field='template']");
+      const enabledEl = row?.querySelector("[data-field='enabled']");
+      config.tts_settings.messages[key] = {
+        template: (templateEl?.value || "").trim(),
+        enabled: enabledEl?.checked !== false,
+      };
+    });
 
     try {
       await this._hass.callWS({ type: "home_climate/save_config", config });

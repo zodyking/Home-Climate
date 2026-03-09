@@ -1,4 +1,4 @@
-"""Presence tracker for Home Climate - person/zone enter/exit automation."""
+"""Presence tracker for Home Climate - person/zone enter/exit automation (per-appliance)."""
 from __future__ import annotations
 
 import asyncio
@@ -11,14 +11,9 @@ from homeassistant.core import HomeAssistant, callback
 if TYPE_CHECKING:
     from .config_manager import ConfigManager
 
-from .const import DOMAIN
+from .const import DOMAIN, TTS_PRESENCE_ENTER, TTS_PRESENCE_LEAVE
 
 _LOGGER = logging.getLogger(__name__)
-
-
-def _rule_key(rule: dict[str, Any]) -> str:
-    """Unique key for a presence rule."""
-    return f"{rule.get('person')}|{rule.get('zone')}|{rule.get('climate_entity')}"
 
 
 def _person_in_zone(person_state: str | None, zone_entity_id: str) -> bool:
@@ -33,8 +28,44 @@ def _person_in_zone(person_state: str | None, zone_entity_id: str) -> bool:
     return False
 
 
+def _build_presence_rules(config_manager: "ConfigManager") -> list[dict[str, Any]]:
+    """
+    Build presence rules from room.appliances[].automation.
+
+    Each appliance with person+zone configured becomes a rule.
+    Returns list of {room, appliance, climate_entity, person, zone, enter_duration_sec, ...}.
+    """
+    rules = []
+    for room in config_manager.rooms:
+        for appliance in room.get("appliances", []):
+            climate_entity = (appliance.get("climate_entity") or "").strip()
+            if not climate_entity:
+                continue
+            auto = appliance.get("automation") or {}
+            person = (auto.get("person") or "").strip()
+            zone = (auto.get("zone") or "").strip()
+            if not person or not zone:
+                continue
+            rules.append({
+                "room": room,
+                "appliance": appliance,
+                "climate_entity": climate_entity,
+                "person": person,
+                "zone": zone,
+                "enter_duration_sec": max(0, min(600, int(auto.get("enter_duration_sec") or 30))),
+                "exit_duration_sec": max(0, min(3600, int(auto.get("exit_duration_sec") or 300))),
+                "target_temp_on_enter": auto.get("target_temp_on_enter"),
+            })
+    return rules
+
+
+def _rule_key(rule: dict[str, Any]) -> str:
+    """Unique key for a presence rule."""
+    return f"{rule.get('person')}|{rule.get('zone')}|{rule.get('climate_entity')}"
+
+
 class PresenceTracker:
-    """Track person/zone presence and control climate on enter/exit."""
+    """Track person/zone presence and control climate on enter/exit (per-appliance)."""
 
     def __init__(self, hass: HomeAssistant, config_manager: "ConfigManager") -> None:
         self.hass = hass
@@ -59,8 +90,8 @@ class PresenceTracker:
         self._exit_tasks.clear()
 
     def _setup_listeners(self) -> None:
-        """Set up state listeners for all person entities in rules."""
-        rules = self.config_manager.presence_rules
+        """Set up state listeners for all person entities in appliance automation rules."""
+        rules = _build_presence_rules(self.config_manager)
         person_entities: set[str] = set()
         for rule in rules:
             person = (rule.get("person") or "").strip()
@@ -82,7 +113,7 @@ class PresenceTracker:
         old_val = old_state.state if old_state else None
         new_val = new_state.state if new_state else None
 
-        rules = self.config_manager.presence_rules
+        rules = _build_presence_rules(self.config_manager)
         for rule in rules:
             if (rule.get("person") or "").strip() != entity_id:
                 continue
@@ -148,28 +179,14 @@ class PresenceTracker:
                     blocking=True,
                 )
 
-            tts_settings = self.config_manager.tts_settings
-            media_player = (tts_settings.get("media_player") or "").strip()
-            if media_player:
-                from .tts_queue import async_send_tts_or_queue
+            from .tts_event import async_send_tts_for_event
 
-                prefix = tts_settings.get("prefix", "Message from Home Climate.")
-                msg_template = tts_settings.get(
-                    "presence_on_msg",
-                    "{prefix} {room_name} climate turned on",
-                )
-                room_name = self._room_name_for_climate(climate_entity)
-                message = msg_template.format(
-                    prefix=prefix,
-                    room_name=room_name or "Room",
-                )
-                await async_send_tts_or_queue(
-                    self.hass,
-                    media_player=media_player,
-                    message=message,
-                    language=tts_settings.get("language"),
-                    volume=tts_settings.get("volume"),
-                )
+            await async_send_tts_for_event(
+                self.hass,
+                self.config_manager,
+                climate_entity,
+                TTS_PRESENCE_ENTER,
+            )
         except Exception as e:
             _LOGGER.error("Presence enter: failed to turn on %s: %s", climate_entity, e)
 
@@ -195,37 +212,16 @@ class PresenceTracker:
                 blocking=True,
             )
 
-            tts_settings = self.config_manager.tts_settings
-            media_player = (tts_settings.get("media_player") or "").strip()
-            if media_player:
-                from .tts_queue import async_send_tts_or_queue
+            from .tts_event import async_send_tts_for_event
 
-                prefix = tts_settings.get("prefix", "Message from Home Climate.")
-                msg_template = tts_settings.get(
-                    "presence_off_msg",
-                    "{prefix} {room_name} climate turned off",
-                )
-                room_name = self._room_name_for_climate(climate_entity)
-                message = msg_template.format(
-                    prefix=prefix,
-                    room_name=room_name or "Room",
-                )
-                await async_send_tts_or_queue(
-                    self.hass,
-                    media_player=media_player,
-                    message=message,
-                    language=tts_settings.get("language"),
-                    volume=tts_settings.get("volume"),
-                )
+            await async_send_tts_for_event(
+                self.hass,
+                self.config_manager,
+                climate_entity,
+                TTS_PRESENCE_LEAVE,
+            )
         except Exception as e:
             _LOGGER.error("Presence exit: failed to turn off %s: %s", climate_entity, e)
-
-    def _room_name_for_climate(self, climate_entity: str) -> str | None:
-        """Get room name for a climate entity from config."""
-        for room in self.config_manager.rooms:
-            if (room.get("climate_entity") or "") == climate_entity:
-                return room.get("name")
-        return None
 
 
 async def async_start_presence_tracker(

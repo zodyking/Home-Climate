@@ -10,7 +10,14 @@ from homeassistant.components import websocket_api
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    TTS_MANUAL_ON,
+    TTS_MANUAL_OFF,
+    TTS_MODE_CHANGE,
+    TTS_TEMP_CHANGE,
+    TTS_FAN_CHANGE,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,6 +31,8 @@ def async_setup(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_send_tts)
     websocket_api.async_register_command(hass, websocket_get_dashboard_data)
     websocket_api.async_register_command(hass, websocket_set_climate_and_announce)
+    websocket_api.async_register_command(hass, websocket_set_temperature)
+    websocket_api.async_register_command(hass, websocket_set_fan_mode)
     _LOGGER.info("Home Climate WebSocket API registered")
 
 
@@ -190,6 +199,46 @@ async def websocket_send_tts(
         connection.send_error(msg["id"], "tts_failed", str(e))
 
 
+def _get_climate_state(hass: HomeAssistant, entity_id: str) -> dict[str, Any]:
+    """Get climate entity state attributes for dashboard."""
+    state = hass.states.get(entity_id)
+    if not state:
+        return {}
+    attrs = state.attributes
+    target_temp = attrs.get("temperature")
+    if target_temp is not None:
+        try:
+            target_temp = float(target_temp)
+        except (ValueError, TypeError):
+            target_temp = None
+    min_temp = 16.0
+    max_temp = 30.0
+    _min = attrs.get("min_temp")
+    if _min is not None:
+        try:
+            min_temp = float(_min)
+        except (ValueError, TypeError):
+            pass
+    _max = attrs.get("max_temp")
+    if _max is not None:
+        try:
+            max_temp = float(_max)
+        except (ValueError, TypeError):
+            pass
+    return {
+        "climate_state": state.state,
+        "climate_mode": attrs.get("hvac_mode"),
+        "target_temp": target_temp,
+        "hvac_action": attrs.get("hvac_action"),
+        "fan_mode": attrs.get("fan_mode"),
+        "min_temp": min_temp,
+        "max_temp": max_temp,
+        "hvac_modes": list(attrs.get("hvac_modes") or []),
+        "fan_modes": list(attrs.get("fan_modes") or []),
+        "current_temperature": attrs.get("current_temperature"),
+    }
+
+
 @websocket_api.websocket_command(
     {vol.Required("type"): "home_climate/get_dashboard_data"}
 )
@@ -199,18 +248,18 @@ async def websocket_get_dashboard_data(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Get dashboard data (room states with temp, humidity, climate status)."""
+    """Get dashboard data: flattened room+appliance cards (monitor-only or appliance)."""
     config_manager = hass.data.get(DOMAIN, {}).get("config_manager")
     if not config_manager:
         connection.send_result(msg["id"], {"rooms": []})
         return
 
     rooms_data = []
+    temp_unit = hass.config.units.temperature_unit
+
     for room in config_manager.rooms:
         temp = None
         humidity = None
-        climate_state = None
-        climate_mode = None
 
         if room.get("temp_sensor"):
             state = hass.states.get(room["temp_sensor"])
@@ -228,50 +277,64 @@ async def websocket_get_dashboard_data(
                 except (ValueError, TypeError):
                     pass
 
-        target_temp = None
-        hvac_action = None
-        fan_mode = None
-        climate_current_temp = None
+        appliances = room.get("appliances") or []
+        if not appliances:
+            rooms_data.append({
+                "id": room.get("id"),
+                "name": room.get("name"),
+                "temp_sensor": room.get("temp_sensor"),
+                "humidity_sensor": room.get("humidity_sensor"),
+                "temp": temp,
+                "humidity": humidity,
+                "is_monitor_only": True,
+                "climate_entity": None,
+                "target_temp": None,
+                "hvac_action": None,
+                "fan_mode": None,
+                "climate_mode": None,
+                "min_temp": 16,
+                "max_temp": 30,
+                "hvac_modes": [],
+                "fan_modes": [],
+                "temperature_unit": temp_unit,
+                "device_type": None,
+                "device_name": None,
+            })
+            continue
 
-        if room.get("climate_entity"):
-            state = hass.states.get(room["climate_entity"])
-            if state:
-                climate_state = state.state
-                climate_mode = state.attributes.get("hvac_mode")
-                attrs = state.attributes
-                target_temp = attrs.get("temperature")
-                if target_temp is not None:
-                    try:
-                        target_temp = float(target_temp)
-                    except (ValueError, TypeError):
-                        target_temp = None
-                hvac_action = attrs.get("hvac_action")
-                fan_mode = attrs.get("fan_mode")
-                climate_current_temp = attrs.get("current_temperature")
-                if climate_current_temp is not None:
-                    try:
-                        climate_current_temp = float(climate_current_temp)
-                    except (ValueError, TypeError):
-                        climate_current_temp = None
+        for appliance in appliances:
+            climate_entity = (appliance.get("climate_entity") or "").strip()
+            climate_data = _get_climate_state(hass, climate_entity) if climate_entity else {}
+            climate_current_temp = climate_data.get("current_temperature")
+            if climate_current_temp is not None:
+                try:
+                    climate_current_temp = float(climate_current_temp)
+                except (ValueError, TypeError):
+                    climate_current_temp = None
+            use_temp = temp if temp is not None else climate_current_temp
 
-        # Use sensor temp if available; else fallback to climate current_temperature
-        if temp is None and climate_current_temp is not None:
-            temp = climate_current_temp
-
-        rooms_data.append({
-            "id": room.get("id"),
-            "name": room.get("name"),
-            "climate_entity": room.get("climate_entity"),
-            "temp_sensor": room.get("temp_sensor"),
-            "humidity_sensor": room.get("humidity_sensor"),
-            "temp": temp,
-            "humidity": humidity,
-            "climate_state": climate_state,
-            "climate_mode": climate_mode,
-            "target_temp": target_temp,
-            "hvac_action": hvac_action,
-            "fan_mode": fan_mode,
-        })
+            rooms_data.append({
+                "id": room.get("id"),
+                "name": room.get("name"),
+                "appliance_id": appliance.get("id"),
+                "temp_sensor": room.get("temp_sensor"),
+                "humidity_sensor": room.get("humidity_sensor"),
+                "temp": use_temp,
+                "humidity": humidity,
+                "is_monitor_only": False,
+                "climate_entity": climate_entity or None,
+                "target_temp": climate_data.get("target_temp"),
+                "hvac_action": climate_data.get("hvac_action"),
+                "fan_mode": climate_data.get("fan_mode"),
+                "climate_mode": climate_data.get("climate_mode"),
+                "min_temp": climate_data.get("min_temp", 16),
+                "max_temp": climate_data.get("max_temp", 30),
+                "hvac_modes": climate_data.get("hvac_modes", []),
+                "fan_modes": climate_data.get("fan_modes", []),
+                "temperature_unit": temp_unit,
+                "device_type": appliance.get("device_type", "minisplit"),
+                "device_name": config_manager.get_device_name(appliance),
+            })
 
     connection.send_result(msg["id"], {"rooms": rooms_data})
 
@@ -295,7 +358,6 @@ async def websocket_set_climate_and_announce(
     entity_id = msg["entity_id"]
     service = msg["service"]
     hvac_mode = msg.get("hvac_mode") or "off"
-    room_name = msg.get("room_name") or "Room"
 
     try:
         if service == "turn_off":
@@ -305,7 +367,7 @@ async def websocket_set_climate_and_announce(
                 {ATTR_ENTITY_ID: entity_id},
                 blocking=True,
             )
-            mode = "off"
+            tts_event = TTS_MANUAL_OFF
         elif service == "turn_on":
             await hass.services.async_call(
                 "climate",
@@ -313,7 +375,7 @@ async def websocket_set_climate_and_announce(
                 {ATTR_ENTITY_ID: entity_id},
                 blocking=True,
             )
-            mode = "on"
+            tts_event = TTS_MANUAL_ON
         else:
             await hass.services.async_call(
                 "climate",
@@ -321,34 +383,118 @@ async def websocket_set_climate_and_announce(
                 {ATTR_ENTITY_ID: entity_id, "hvac_mode": hvac_mode},
                 blocking=True,
             )
-            mode = hvac_mode
+            tts_event = TTS_MODE_CHANGE
 
         config_manager = hass.data.get(DOMAIN, {}).get("config_manager")
         if config_manager:
-            tts_settings = config_manager.tts_settings
-            media_player = (tts_settings.get("media_player") or "").strip()
-            if media_player:
-                from .tts_queue import async_send_tts_or_queue
+            from .tts_event import async_send_tts_for_event
 
-                prefix = tts_settings.get("prefix", "Message from Home Climate.")
-                msg_template = tts_settings.get(
-                    "mode_change_msg",
-                    "{prefix} {room_name} climate set to {mode}",
-                )
-                message = msg_template.format(
-                    prefix=prefix,
-                    room_name=room_name,
-                    mode=mode,
-                )
-                await async_send_tts_or_queue(
-                    hass,
-                    media_player=media_player,
-                    message=message,
-                    language=tts_settings.get("language"),
-                    volume=tts_settings.get("volume"),
-                )
+            await async_send_tts_for_event(
+                hass,
+                config_manager,
+                entity_id,
+                tts_event,
+                mode=tts_event == TTS_MODE_CHANGE and hvac_mode or "",
+            )
 
         connection.send_result(msg["id"], {"success": True})
     except Exception as e:
         _LOGGER.exception("set_climate_and_announce failed: %s", e)
+        connection.send_error(msg["id"], "climate_failed", str(e))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "home_climate/set_temperature",
+        vol.Required("entity_id"): str,
+        vol.Required("temperature"): vol.Coerce(float),
+        vol.Optional("hvac_mode"): str,
+        vol.Optional("room_name"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_set_temperature(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Set climate target temperature and optionally announce via TTS."""
+    entity_id = msg["entity_id"]
+    temperature = msg["temperature"]
+    hvac_mode = msg.get("hvac_mode")
+
+    try:
+        service_data: dict[str, Any] = {
+            ATTR_ENTITY_ID: entity_id,
+            "temperature": temperature,
+        }
+        if hvac_mode:
+            service_data["hvac_mode"] = hvac_mode
+
+        await hass.services.async_call(
+            "climate",
+            "set_temperature",
+            service_data,
+            blocking=True,
+        )
+
+        config_manager = hass.data.get(DOMAIN, {}).get("config_manager")
+        if config_manager:
+            from .tts_event import async_send_tts_for_event
+
+            temp_val = int(temperature) if temperature == int(temperature) else temperature
+            await async_send_tts_for_event(
+                hass,
+                config_manager,
+                entity_id,
+                TTS_TEMP_CHANGE,
+                temp=temp_val,
+            )
+
+        connection.send_result(msg["id"], {"success": True})
+    except Exception as e:
+        _LOGGER.exception("set_temperature failed: %s", e)
+        connection.send_error(msg["id"], "climate_failed", str(e))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "home_climate/set_fan_mode",
+        vol.Required("entity_id"): str,
+        vol.Required("fan_mode"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_set_fan_mode(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Set climate fan mode and optionally announce via TTS."""
+    entity_id = msg["entity_id"]
+    fan_mode = msg["fan_mode"]
+
+    try:
+        await hass.services.async_call(
+            "climate",
+            "set_fan_mode",
+            {ATTR_ENTITY_ID: entity_id, "fan_mode": fan_mode},
+            blocking=True,
+        )
+
+        config_manager = hass.data.get(DOMAIN, {}).get("config_manager")
+        if config_manager:
+            from .tts_event import async_send_tts_for_event
+
+            await async_send_tts_for_event(
+                hass,
+                config_manager,
+                entity_id,
+                TTS_FAN_CHANGE,
+                fan_mode=fan_mode,
+            )
+
+        connection.send_result(msg["id"], {"success": True})
+    except Exception as e:
+        _LOGGER.exception("set_fan_mode failed: %s", e)
         connection.send_error(msg["id"], "climate_failed", str(e))
