@@ -1,5 +1,5 @@
 {
-  "domain": "home_weather",
+  "domain": "home_climate",
   "name": "Home Climate",
   "codeowners": ["@zodyking"],
   "config_flow": true,

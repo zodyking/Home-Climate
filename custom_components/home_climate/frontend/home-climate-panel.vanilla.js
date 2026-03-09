@@ -1,43 +1,44 @@
 /**
- * Home Climate Panel - Climate monitoring and automation dashboard
- * Dark blue theme, clamp-responsive, admin-only settings
+ * Home Climate Panel - Della Air-inspired climate dashboard
+ * Deep blue palette, glass cards, icons, full state display
  */
 
 const STYLES = `
   :host {
     display: block;
     height: 100%;
-    background: linear-gradient(180deg, #0d1b2a 0%, #1b263b 100%);
-    color: #e1e8ed;
-    font-family: 'Roboto', 'Segoe UI', -apple-system, sans-serif;
-    --accent: #7c3aed;
-    --accent-hover: #8b5cf6;
-    --accent-dim: rgba(124, 58, 237, 0.2);
-    --card-bg: rgba(27, 38, 59, 0.85);
-    --card-border: rgba(255, 255, 255, 0.08);
+    background: linear-gradient(165deg, #060d18 0%, #0a1628 35%, #0e2942 70%, #132f4c 100%);
+    color: #e8eef3;
+    font-family: 'Inter', 'Roboto', 'Segoe UI', -apple-system, sans-serif;
+    --accent: #5b8def;
+    --accent-hover: #7aa3f5;
+    --accent-dim: rgba(91, 141, 239, 0.18);
+    --card-bg: rgba(13, 30, 55, 0.65);
+    --card-border: rgba(255, 255, 255, 0.06);
+    --card-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
   }
   * { box-sizing: border-box; }
   .panel-container {
     min-height: 100vh;
-    padding: clamp(8px, 2vw, 20px);
+    padding: clamp(12px, 2.5vw, 24px);
   }
   .panel-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: clamp(12px, 3vw, 20px) clamp(16px, 4vw, 24px);
-    background: rgba(13, 27, 42, 0.9);
+    padding: clamp(14px, 3vw, 22px) clamp(18px, 4vw, 28px);
+    background: rgba(6, 13, 24, 0.85);
     border-bottom: 1px solid var(--card-border);
-    backdrop-filter: blur(12px);
-    margin: calc(-1 * clamp(8px, 2vw, 20px)) calc(-1 * clamp(8px, 2vw, 20px)) clamp(12px, 2vw, 20px);
+    backdrop-filter: blur(16px);
+    margin: calc(-1 * clamp(12px, 2.5vw, 24px)) calc(-1 * clamp(12px, 2.5vw, 24px)) clamp(16px, 2.5vw, 24px);
   }
   .header-left {
     display: flex;
     align-items: center;
-    gap: clamp(8px, 2vw, 16px);
+    gap: clamp(10px, 2vw, 18px);
   }
   .panel-title {
-    font-size: clamp(18px, 4vw, 24px);
+    font-size: clamp(20px, 4vw, 26px);
     font-weight: 600;
     margin: 0;
     letter-spacing: 0.02em;
@@ -46,18 +47,18 @@ const STYLES = `
     text-align: right;
   }
   .header-time {
-    font-size: clamp(20px, 4vw, 28px);
+    font-size: clamp(22px, 4vw, 30px);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     display: block;
   }
   .header-date {
-    font-size: clamp(11px, 2vw, 13px);
+    font-size: clamp(12px, 2vw, 14px);
     opacity: 0.85;
   }
   .settings-btn {
-    width: 40px;
-    height: 40px;
+    width: 42px;
+    height: 42px;
     border-radius: 10px;
     border: 1px solid var(--card-border);
     background: var(--card-bg);
@@ -79,92 +80,148 @@ const STYLES = `
   }
   .rooms-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
-    gap: clamp(12px, 3vw, 20px);
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+    gap: clamp(16px, 3vw, 24px);
   }
   .room-card {
     background: var(--card-bg);
-    border-radius: clamp(12px, 3vw, 16px);
+    border-radius: clamp(14px, 3vw, 18px);
     border: 1px solid var(--card-border);
-    padding: clamp(14px, 3vw, 20px);
-    transition: box-shadow 0.2s;
+    padding: clamp(18px, 3.5vw, 24px);
+    backdrop-filter: blur(12px);
+    transition: box-shadow 0.25s, transform 0.2s;
   }
   .room-card:hover {
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--card-shadow);
   }
   .room-name {
-    font-size: clamp(14px, 2.5vw, 16px);
+    font-size: clamp(15px, 2.5vw, 17px);
     font-weight: 600;
-    margin: 0 0 clamp(12px, 2vw, 16px);
+    margin: 0 0 clamp(14px, 2.5vw, 18px);
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
+    opacity: 0.95;
   }
   .room-stats {
     display: flex;
-    gap: clamp(16px, 4vw, 24px);
+    gap: clamp(20px, 4vw, 28px);
     margin-bottom: clamp(12px, 2vw, 16px);
   }
   .room-stat {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 10px;
+  }
+  .stat-icon {
+    width: 28px;
+    height: 28px;
+    opacity: 0.85;
+  }
+  .room-stat-inner {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
   }
   .room-stat-value {
-    font-size: clamp(18px, 4vw, 24px);
+    font-size: clamp(22px, 4.5vw, 28px);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
   }
   .room-stat-unit {
-    font-size: clamp(11px, 2vw, 12px);
+    font-size: clamp(12px, 2vw, 13px);
+    opacity: 0.75;
+  }
+  .room-state-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: clamp(12px, 2vw, 16px);
+  }
+  .state-badge {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--card-border);
+    opacity: 0.9;
+  }
+  .state-badge.state-action {
+    background: var(--accent-dim);
+    border-color: rgba(91, 141, 239, 0.3);
+  }
+  .state-badge.state-fan {
     opacity: 0.8;
   }
   .room-controls {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin-top: clamp(8px, 2vw, 12px);
+    gap: 10px;
+    margin-top: clamp(10px, 2vw, 14px);
   }
   .ctrl-btn {
-    padding: 8px 14px;
-    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border-radius: 10px;
     border: 1px solid var(--card-border);
-    background: transparent;
+    background: rgba(255, 255, 255, 0.04);
     color: inherit;
-    font-size: clamp(11px, 2vw, 12px);
+    font-size: clamp(12px, 2vw, 13px);
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
   }
   .ctrl-btn:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.08);
   }
   .ctrl-btn.active {
     background: var(--accent);
     border-color: var(--accent);
     color: #fff;
   }
-  .loading, .error {
-    padding: 40px;
+  .ctrl-icon {
+    width: 18px;
+    height: 18px;
+  }
+  .loading {
+    padding: 60px 24px;
+    text-align: center;
+    font-size: clamp(15px, 2.5vw, 17px);
+    opacity: 0.9;
+  }
+  .loading-spinner {
+    width: 48px;
+    height: 48px;
+    margin: 0 auto 20px;
+    border: 3px solid var(--card-border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error {
+    padding: 40px 24px;
     text-align: center;
     font-size: clamp(14px, 2.5vw, 16px);
+    color: #f87171;
   }
-  .error { color: #f87171; }
   .empty-state {
     text-align: center;
-    padding: clamp(40px, 10vw, 80px) 20px;
-    color: rgba(225, 232, 237, 0.6);
-    font-size: clamp(14px, 2.5vw, 16px);
+    padding: clamp(48px, 12vw, 96px) 24px;
+    color: rgba(232, 238, 243, 0.65);
+    font-size: clamp(15px, 2.5vw, 17px);
   }
-  .house-icon {
-    width: 64px;
-    height: 64px;
-    margin: 0 auto 16px;
-    opacity: 0.5;
+  .empty-illustration {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 24px;
+    opacity: 0.4;
   }
-  .house-icon path {
+  .empty-illustration path {
     fill: none;
     stroke: currentColor;
-    stroke-width: 1.5;
+    stroke-width: 1.2;
   }
 `;
 
@@ -236,9 +293,9 @@ class HomeWeatherPanel extends HTMLElement {
 
     try {
       const [configRes, userRes, entitiesRes] = await Promise.all([
-        this._hass.callWS({ type: "home_weather/get_config" }),
-        this._hass.callWS({ type: "home_weather/get_user_info" }).catch(() => ({ is_admin: false })),
-        this._hass.callWS({ type: "home_weather/get_entities" }).catch(() => ({ climate: [], sensors: [], persons: [], zones: [], media_players: [] })),
+        this._hass.callWS({ type: "home_climate/get_config" }),
+        this._hass.callWS({ type: "home_climate/get_user_info" }).catch(() => ({ is_admin: false })),
+        this._hass.callWS({ type: "home_climate/get_entities" }).catch(() => ({ climate: [], sensors: [], persons: [], zones: [], media_players: [] })),
       ]);
       this._config = configRes || {};
       this._isAdmin = userRes?.is_admin === true;
@@ -258,7 +315,7 @@ class HomeWeatherPanel extends HTMLElement {
   async _loadDashboardData() {
     if (!this._hass || this._showSettings) return;
     try {
-      const res = await this._hass.callWS({ type: "home_weather/get_dashboard_data" });
+      const res = await this._hass.callWS({ type: "home_climate/get_dashboard_data" });
       this._dashboardData = res;
       if (!this._loading) this._render();
     } catch (e) {
@@ -266,16 +323,19 @@ class HomeWeatherPanel extends HTMLElement {
     }
   }
 
-  async _callClimateService(service, entityId, data = {}) {
+  async _setClimateAndAnnounce(entityId, service, hvacMode, roomName) {
     if (!this._hass || !entityId) return;
     try {
-      await this._hass.callService("climate", service, {
+      await this._hass.callWS({
+        type: "home_climate/set_climate_and_announce",
         entity_id: entityId,
-        ...data,
+        service,
+        hvac_mode: hvacMode,
+        room_name: roomName,
       });
       await this._loadDashboardData();
     } catch (e) {
-      console.error("Climate service error:", e);
+      console.error("Climate set-and-announce error:", e);
     }
   }
 
@@ -301,7 +361,7 @@ class HomeWeatherPanel extends HTMLElement {
           </div>
         </header>
 
-        ${this._loading ? '<div class="loading">Loading...</div>' : ""}
+        ${this._loading ? '<div class="loading"><div class="loading-spinner" aria-hidden="true"></div>Loading...</div>' : ""}
         ${this._error ? `<div class="error">${this._escapeHtml(this._error)}</div>` : ""}
 
         ${!this._loading && !this._error && this._showSettings ? this._renderSettings() : ""}
@@ -365,8 +425,9 @@ class HomeWeatherPanel extends HTMLElement {
     if (rooms.length === 0) {
       return `
         <div class="empty-state">
-          <svg class="house-icon" viewBox="0 0 64 64" aria-hidden="true">
-            <path d="M32 8L8 28v28h18V38h12v18h18V28z"/>
+          <svg class="empty-illustration" viewBox="0 0 120 120" aria-hidden="true">
+            <path d="M60 20L20 55v45h30V70h20v30h30V55z"/>
+            <circle cx="60" cy="45" r="8"/>
           </svg>
           <p>No rooms configured.</p>
           <p>${this._isAdmin ? "Open Settings to add rooms and map climate entities." : "Contact an admin to configure rooms."}</p>
@@ -381,31 +442,58 @@ class HomeWeatherPanel extends HTMLElement {
     `;
   }
 
+  _hvacActionLabel(action) {
+    const labels = { heating: "Heating", cooling: "Cooling", idle: "Idle", off: "Off" };
+    return labels[action] || (action || "—");
+  }
+
   _renderRoomCard(room) {
     const temp = room.temp != null ? room.temp.toFixed(1) : "—";
     const humidity = room.humidity != null ? room.humidity.toFixed(0) : "—";
+    const targetTemp = room.target_temp != null ? room.target_temp.toFixed(0) : null;
     const mode = room.climate_mode || "off";
+    const hvacAction = room.hvac_action || null;
+    const fanMode = room.fan_mode || null;
     const hasClimate = !!room.climate_entity;
+    const roomName = room.name || "Room";
+
+    const tempIcon = `<svg class="stat-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15 13V5c0-1.66-1.34-3-3-3S9 3.34 9 5v8c-1.21.91-2 2.37-2 4 0 2.76 2.24 5 5 5s5-2.24 5-5c0-1.63-.79-3.09-2-4zm-4-8c0-.55.45-1 1-1s1 .45 1 1h-1v1h1v2h-1v1h1v2h-2v-6z"/></svg>`;
+    const humidityIcon = `<svg class="stat-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`;
+    const heatIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M13.5 1.67c.74 0 1.33.6 1.33 1.33 0 .67-.47 1.2-1.1 1.32L12 4.5 9.6 4.08c-.63-.12-1.1-.65-1.1-1.32 0-.73.59-1.33 1.33-1.33H13.5zM6 22.67c0 .73.59 1.33 1.33 1.33h9.34c.74 0 1.33-.6 1.33-1.33V12h-12v10.67zM14 14v6.67h-4V14h4z"/></svg>`;
+    const coolIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M22 11h-4.17l3.24-3.24-1.41-1.41L16 9.34V5h-2v4.34l-3.83-3.83-1.41 1.41L10.17 11H6v2h4.17l-3.24 3.24 1.41 1.41L14 14.66V19h2v-4.34l3.83 3.83 1.41-1.41L17.83 13H22z"/></svg>`;
+    const offIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M18 14.49V9c0-1.1-.9-2-2-2h-3.15l-1.6-1.6L10 7h4v2H6v2h8v2H6v2h8v2H6v2h10c1.1 0 2-.9 2-2v-5.51l2 2z"/></svg>`;
+    const onIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>`;
 
     return `
       <div class="room-card" data-room-id="${this._escapeHtml(room.id || "")}">
-        <h3 class="room-name">${this._escapeHtml(room.name || "Room")}</h3>
+        <h3 class="room-name">${this._escapeHtml(roomName)}</h3>
         <div class="room-stats">
           <div class="room-stat">
-            <span class="room-stat-value">${temp}</span>
-            <span class="room-stat-unit">°C</span>
+            ${tempIcon}
+            <div class="room-stat-inner">
+              <span class="room-stat-value">${temp}</span>
+              <span class="room-stat-unit">°C</span>
+            </div>
           </div>
           <div class="room-stat">
-            <span class="room-stat-value">${humidity}</span>
-            <span class="room-stat-unit">%</span>
+            ${humidityIcon}
+            <div class="room-stat-inner">
+              <span class="room-stat-value">${humidity}</span>
+              <span class="room-stat-unit">%</span>
+            </div>
           </div>
+        </div>
+        <div class="room-state-row">
+          ${targetTemp != null ? `<span class="state-badge">Target: ${targetTemp} °C</span>` : ""}
+          ${hvacAction ? `<span class="state-badge state-action">${this._hvacActionLabel(hvacAction)}</span>` : ""}
+          ${fanMode ? `<span class="state-badge state-fan">Fan: ${this._escapeHtml(fanMode)}</span>` : ""}
         </div>
         ${hasClimate ? `
           <div class="room-controls">
-            <button class="ctrl-btn ${mode !== "off" ? "active" : ""}" data-action="on" data-entity="${this._escapeHtml(room.climate_entity)}">ON</button>
-            <button class="ctrl-btn ${mode === "heat" ? "active" : ""}" data-action="heat" data-entity="${this._escapeHtml(room.climate_entity)}">HEAT</button>
-            <button class="ctrl-btn ${mode === "cool" ? "active" : ""}" data-action="cool" data-entity="${this._escapeHtml(room.climate_entity)}">COOL</button>
-            <button class="ctrl-btn ${mode === "off" ? "active" : ""}" data-action="off" data-entity="${this._escapeHtml(room.climate_entity)}">OFF</button>
+            <button class="ctrl-btn ${mode !== "off" ? "active" : ""}" data-action="on" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}">${onIcon}<span>ON</span></button>
+            <button class="ctrl-btn ${mode === "heat" ? "active" : ""}" data-action="heat" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}">${heatIcon}<span>HEAT</span></button>
+            <button class="ctrl-btn ${mode === "cool" ? "active" : ""}" data-action="cool" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}">${coolIcon}<span>COOL</span></button>
+            <button class="ctrl-btn ${mode === "off" ? "active" : ""}" data-action="off" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}">${offIcon}<span>OFF</span></button>
           </div>
         ` : ""}
       </div>
@@ -417,13 +505,14 @@ class HomeWeatherPanel extends HTMLElement {
       btn.addEventListener("click", (e) => {
         const entity = e.currentTarget.dataset.entity;
         const action = e.currentTarget.dataset.action;
+        const roomName = e.currentTarget.dataset.roomName || "Room";
         if (!entity) return;
         if (action === "off") {
-          this._callClimateService("turn_off", entity);
+          this._setClimateAndAnnounce(entity, "turn_off", "off", roomName);
         } else if (action === "on") {
-          this._callClimateService("turn_on", entity);
+          this._setClimateAndAnnounce(entity, "turn_on", "on", roomName);
         } else if (action === "heat" || action === "cool") {
-          this._callClimateService("set_hvac_mode", entity, { hvac_mode: action });
+          this._setClimateAndAnnounce(entity, "set_hvac_mode", action, roomName);
         }
       });
     });
@@ -683,7 +772,7 @@ class HomeWeatherPanel extends HTMLElement {
     };
 
     try {
-      await this._hass.callWS({ type: "home_weather/save_config", config });
+      await this._hass.callWS({ type: "home_climate/save_config", config });
       this._config = config;
       this._showSettings = false;
       await this._loadDashboardData();
@@ -701,4 +790,4 @@ class HomeWeatherPanel extends HTMLElement {
   }
 }
 
-customElements.define("home-weather-panel", HomeWeatherPanel);
+customElements.define("home-climate-panel", HomeWeatherPanel);

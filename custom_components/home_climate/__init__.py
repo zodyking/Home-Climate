@@ -107,11 +107,11 @@ async def async_register_panels(hass: HomeAssistant, entry: ConfigEntry) -> None
         pass
     await panel_custom.async_register_panel(
         hass,
-        webcomponent_name="home-weather-panel",
+        webcomponent_name="home-climate-panel",
         frontend_url_path=PANEL_URL,
         sidebar_title=PANEL_TITLE,
         sidebar_icon=PANEL_ICON,
-        module_url=f"{panel_url}/home-weather-panel.js?v={version}&_={load_id}",
+        module_url=f"{panel_url}/home-climate-panel.js?v={version}&_={load_id}",
         embed_iframe=False,
         require_admin=False,
     )

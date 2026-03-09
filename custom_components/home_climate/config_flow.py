@@ -8,7 +8,7 @@ from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from .const import DOMAIN, NAME
 
 
-class HomeWeatherConfigFlow(ConfigFlow, domain=DOMAIN):
+class HomeClimateConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Home Climate."""
 
     VERSION = 1

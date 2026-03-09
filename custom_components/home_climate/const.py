@@ -1,16 +1,16 @@
 """Constants for Home Climate integration."""
 from __future__ import annotations
 
-DOMAIN = "home_weather"
+DOMAIN = "home_climate"
 NAME = "Home Climate"
 
 # Config file
-CONFIG_FILE = "home_weather.json"
+CONFIG_FILE = "home_climate.json"
 
 # Panel configuration
 PANEL_ICON = "mdi:thermometer"
 PANEL_TITLE = "Home Climate"
-PANEL_URL = "home-weather"
+PANEL_URL = "home-climate"
 
 # Default TTS settings
 DEFAULT_TTS_LANGUAGE = "en"

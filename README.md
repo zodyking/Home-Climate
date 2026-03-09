@@ -27,13 +27,25 @@ Climate monitoring and automation for Home Assistant. A beautiful dashboard to m
 
 ### Manual
 
-1. Copy the `custom_components/home_weather` folder into your Home Assistant `custom_components` directory
+1. Copy the `custom_components/home_climate` folder into your Home Assistant `custom_components` directory
 2. Restart Home Assistant
 3. Go to **Settings** → **Devices & Services** → **Add Integration** → search for **Home Climate**
 
 ## Configuration
 
 Add the integration and the **Home Climate** panel will appear in your sidebar. Configure rooms, automation thresholds, presence rules, and TTS via the settings gear (admin only).
+
+## Development
+
+The dashboard is built with Vue 3. To rebuild after editing the frontend:
+
+```bash
+cd custom_components/home_climate
+npm install
+npm run build
+```
+
+The built `home-climate-panel.js` is output to `frontend/`. A vanilla JS backup is kept as `frontend/home-climate-panel.vanilla.js`.
 
 ## Links
 
