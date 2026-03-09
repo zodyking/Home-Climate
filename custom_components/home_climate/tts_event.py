@@ -23,6 +23,13 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
+def _format_for_speech(s: str) -> str:
+    """Replace underscores with spaces for TTS (e.g. fan_only -> fan only)."""
+    if not s:
+        return ""
+    return str(s).replace("_", " ").strip()
+
+
 async def async_send_tts_for_event(
     hass: HomeAssistant,
     config_manager: "ConfigManager",
@@ -72,11 +79,11 @@ async def async_send_tts_for_event(
         "room_name": room_name,
         "device_name": device_name,
         "device_type": device_type,
-        "mode": format_vars.get("mode", ""),
         "temp": format_vars.get("temp", ""),
-        "fan_mode": format_vars.get("fan_mode", ""),
     }
     vars_dict.update(format_vars)
+    vars_dict["mode"] = _format_for_speech(str(vars_dict.get("mode", "")))
+    vars_dict["fan_mode"] = _format_for_speech(str(vars_dict.get("fan_mode", "")))
 
     try:
         message = template.format(**vars_dict)

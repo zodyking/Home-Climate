@@ -7,15 +7,15 @@ const STYLES = `
   :host {
     display: block;
     height: 100%;
-    background: #0a1628;
+    background: #152238;
     color: #e8eef3;
     font-family: 'Inter', 'Roboto', 'Segoe UI', -apple-system, sans-serif;
-    --accent: #5b8def;
-    --accent-hover: #7aa3f5;
-    --accent-dim: rgba(91, 141, 239, 0.18);
-    --card-bg: rgba(13, 30, 55, 0.65);
-    --card-border: rgba(255, 255, 255, 0.06);
-    --card-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+    --accent: #6b9cf5;
+    --accent-hover: #8ab4f7;
+    --accent-dim: rgba(91, 141, 239, 0.2);
+    --card-bg: rgba(28, 50, 88, 0.75);
+    --card-border: rgba(255, 255, 255, 0.1);
+    --card-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   }
   * { box-sizing: border-box; }
   .panel-container {
@@ -27,7 +27,7 @@ const STYLES = `
     align-items: center;
     justify-content: space-between;
     padding: clamp(14px, 3vw, 22px) clamp(18px, 4vw, 28px);
-    background: #0a1628;
+    background: #152238;
     border-bottom: 1px solid var(--card-border);
     margin: calc(-1 * clamp(12px, 2.5vw, 24px)) calc(-1 * clamp(12px, 2.5vw, 24px)) clamp(16px, 2.5vw, 24px);
   }
@@ -81,6 +81,100 @@ const STYLES = `
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
     gap: clamp(16px, 3vw, 24px);
+  }
+  .room-card-parent {
+    display: flex;
+    flex-direction: column;
+    background: var(--card-bg);
+    border-radius: clamp(14px, 3vw, 18px);
+    border: 1px solid var(--card-border);
+    padding: clamp(18px, 3.5vw, 24px);
+    transition: box-shadow 0.25s, transform 0.2s;
+  }
+  .room-card-parent:hover {
+    box-shadow: var(--card-shadow);
+  }
+  .appliances-subgrid {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(16px, 2.5vw, 20px);
+    margin-top: clamp(12px, 2vw, 16px);
+  }
+  .appliance-subcard {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: clamp(10px, 2vw, 12px);
+    border: 1px solid var(--card-border);
+    padding: clamp(14px, 2.5vw, 20px);
+  }
+  .onoff-toggle-wrap {
+    position: absolute;
+    top: clamp(8px, 1.5vw, 12px);
+    right: clamp(8px, 1.5vw, 12px);
+  }
+  .onoff-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 28px;
+    border-radius: 14px;
+    border: 1px solid var(--card-border);
+    background: rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .onoff-toggle.on {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .onoff-toggle .toggle-dot {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.2s;
+  }
+  .onoff-toggle:not(.on) .toggle-dot { transform: translateX(-7px); }
+  .onoff-toggle.on .toggle-dot { transform: translateX(7px); }
+  .fan-slider-wrap {
+    margin-top: clamp(8px, 1.5vw, 12px);
+    width: 100%;
+    max-width: 200px;
+  }
+  .fan-slider-wrap input[type="range"] {
+    width: 100%;
+    height: 6px;
+    -webkit-appearance: none;
+    background: rgba(255,255,255,0.12);
+    border-radius: 3px;
+  }
+  .fan-slider-wrap input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+  }
+  .fan-slider-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    opacity: 0.8;
+    margin-top: 4px;
+  }
+  .device-name {
+    font-size: clamp(14px, 2.2vw, 16px);
+    font-weight: 600;
+    margin: 0 0 clamp(10px, 2vw, 14px);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.95;
   }
   .room-card {
     display: flex;
@@ -247,11 +341,15 @@ const STYLES = `
   }
   .room-controls {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
     justify-content: center;
-    gap: 10px;
+    gap: 8px;
     margin-top: clamp(10px, 2vw, 14px);
+    padding-bottom: 4px;
   }
+  .room-controls::-webkit-scrollbar { height: 4px; }
+  .room-controls::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 2px; }
   .ctrl-btn {
     display: inline-flex;
     align-items: center;
@@ -333,6 +431,8 @@ class HomeWeatherPanel extends HTMLElement {
     this._loading = true;
     this._error = null;
     this._refreshInterval = null;
+    this._collapsedRooms = new Set();
+    this._collapsedAppliances = new Set();
   }
 
   set hass(hass) {
@@ -510,6 +610,62 @@ class HomeWeatherPanel extends HTMLElement {
       });
     }
 
+    root.querySelectorAll("[data-action='delete-room']").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const roomName = btn.dataset.roomName || "this room";
+        if (!confirm(`Delete ${roomName}? This cannot be undone.`)) return;
+        const idx = parseInt(btn.dataset.roomIndex, 10);
+        const rooms = this._config?.rooms || [];
+        if (idx >= 0 && idx < rooms.length) {
+          rooms.splice(idx, 1);
+          this._collapsedRooms.clear();
+          this._collapsedAppliances.clear();
+          this._render();
+        }
+      });
+    });
+
+    root.querySelectorAll("[data-action='delete-appliance']").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const appName = btn.dataset.appName || "this appliance";
+        if (!confirm(`Delete ${appName}? This cannot be undone.`)) return;
+        const roomIdx = parseInt(btn.dataset.roomIndex, 10);
+        const appIdx = parseInt(btn.dataset.appIndex, 10);
+        const room = this._config?.rooms?.[roomIdx];
+        if (room?.appliances && appIdx >= 0 && appIdx < room.appliances.length) {
+          room.appliances.splice(appIdx, 1);
+          this._collapsedAppliances.clear();
+          this._render();
+        }
+      });
+    });
+
+    root.querySelectorAll("[data-action='toggle-room']").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        if (e.target.closest("[data-action='delete-room']")) return;
+        const key = el.dataset.key;
+        if (!key) return;
+        if (this._collapsedRooms.has(key)) this._collapsedRooms.delete(key);
+        else this._collapsedRooms.add(key);
+        const row = el.closest(".room-row");
+        if (row) row.classList.toggle("collapsed");
+      });
+    });
+
+    root.querySelectorAll("[data-action='toggle-appliance']").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        if (e.target.closest("[data-action='delete-appliance']")) return;
+        const key = el.dataset.key;
+        if (!key) return;
+        if (this._collapsedAppliances.has(key)) this._collapsedAppliances.delete(key);
+        else this._collapsedAppliances.add(key);
+        const card = el.closest(".appliance-card");
+        if (card) card.classList.toggle("collapsed");
+      });
+    });
+
     root.querySelectorAll("[data-action='add-appliance']").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         const roomIndex = parseInt(e.currentTarget.dataset.roomIndex, 10);
@@ -562,7 +718,71 @@ class HomeWeatherPanel extends HTMLElement {
 
     return `
       <div class="rooms-grid">
-        ${rooms.map((r) => this._renderRoomCard(r)).join("")}
+        ${rooms.map((r) => this._renderRoomParentCard(r)).join("")}
+      </div>
+    `;
+  }
+
+  _renderRoomParentCard(room) {
+    const temp = room.temp != null ? room.temp.toFixed(1) : "—";
+    const humidity = room.humidity != null ? room.humidity.toFixed(0) : "—";
+    const roomName = room.name || "Room";
+    const unit = (room.temperature_unit || "°C").replace("°", "").toUpperCase() === "F" ? "°F" : "°C";
+    const appliances = room.appliances || [];
+    const isMonitorOnly = room.is_monitor_only || appliances.length === 0;
+
+    const tempIcon = `<svg class="stat-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15 13V5c0-1.66-1.34-3-3-3S9 3.34 9 5v8c-1.21.91-2 2.37-2 4 0 2.76 2.24 5 5 5s5-2.24 5-5c0-1.63-.79-3.09-2-4zm-4-8c0-.55.45-1 1-1s1 .45 1 1h-1v1h1v2h-1v1h1v2h-2v-6z"/></svg>`;
+    const humidityIcon = `<svg class="stat-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`;
+
+    return `
+      <div class="room-card-parent" data-room-id="${this._escapeHtml(room.id || "")}">
+        <h3 class="room-name">${this._escapeHtml(roomName)}</h3>
+        <div class="room-stats">
+          <div class="room-stat">
+            ${tempIcon}
+            <div class="room-stat-inner">
+              <span class="room-stat-value">${temp}</span>
+              <span class="room-stat-unit">${unit}</span>
+            </div>
+          </div>
+          <div class="room-stat">
+            ${humidityIcon}
+            <div class="room-stat-inner">
+              <span class="room-stat-value">${humidity}</span>
+              <span class="room-stat-unit">%</span>
+            </div>
+          </div>
+        </div>
+        ${isMonitorOnly ? `<div class="room-state-row"><span class="state-badge">Monitor</span></div>` : ""}
+        ${appliances.length > 0 ? `
+          <div class="appliances-subgrid">
+            ${appliances.map((app) => this._renderApplianceSubCard(app, room)).join("")}
+          </div>
+        ` : ""}
+      </div>
+    `;
+  }
+
+  _renderApplianceSubCard(appliance, room) {
+    const app = {
+      ...appliance,
+      name: appliance.device_name || "Appliance",
+      humidity: room.humidity,
+      temperature_unit: room.temperature_unit,
+      _roomNameForTts: room.name || "Room",
+    };
+    const isOn = (appliance.climate_mode || "off") !== "off";
+    const entity = this._escapeHtml(appliance.climate_entity || "");
+    const roomName = this._escapeHtml(room.name || "Room");
+    return `
+      <div class="appliance-subcard" data-entity="${entity}" data-room-name="${roomName}">
+        <div class="onoff-toggle-wrap">
+          <button class="onoff-toggle ${isOn ? "on" : ""}" data-action="onoff" data-entity="${entity}" data-room-name="${roomName}" data-is-on="${isOn}" aria-label="${isOn ? "Turn off" : "Turn on"}">
+            <span class="toggle-dot"></span>
+          </button>
+        </div>
+        <h4 class="device-name">${this._escapeHtml(appliance.device_name || "Appliance")}</h4>
+        ${this._renderRoomCard(app, true)}
       </div>
     `;
   }
@@ -577,13 +797,20 @@ class HomeWeatherPanel extends HTMLElement {
     return labels[mode] || mode;
   }
 
-  _allowedModes(hvacModes) {
+  _allowedModes(hvacModes, excludeOff = false) {
     const exclude = new Set(["heat_cool", "auto"]);
-    const allowed = ["heat", "cool", "dry", "fan_only", "off"];
+    let allowed = ["heat", "cool", "dry", "fan_only", "off"];
+    if (excludeOff) allowed = allowed.filter((m) => m !== "off");
     if (hvacModes && hvacModes.length > 0) {
       return allowed.filter((m) => hvacModes.includes(m) && !exclude.has(m));
     }
     return allowed;
+  }
+
+  _fanSliderModes(fanModes) {
+    const order = ["low", "medium", "high"];
+    const normalized = (fanModes || []).map((m) => String(m).toLowerCase());
+    return order.filter((m) => normalized.includes(m));
   }
 
   _renderTempWheel(room) {
@@ -609,8 +836,9 @@ class HomeWeatherPanel extends HTMLElement {
 
     const modeLabel = mode !== "off" ? this._modeLabel(mode) : "";
 
+    const ttsRoomName = room._roomNameForTts || room.name || "Room";
     return `
-      <div class="temp-wheel-wrap" data-entity="${this._escapeHtml(room.climate_entity || "")}" data-room-name="${this._escapeHtml(room.name || "Room")}" data-min="${minT}" data-max="${maxT}" data-target="${target}">
+      <div class="temp-wheel-wrap" data-entity="${this._escapeHtml(room.climate_entity || "")}" data-room-name="${this._escapeHtml(ttsRoomName)}" data-min="${minT}" data-max="${maxT}" data-target="${target}">
         <svg class="temp-wheel-svg" viewBox="0 0 100 100" aria-hidden="true">
           <circle class="temp-wheel-track" cx="50" cy="50" r="${r}" />
           <circle class="temp-wheel-fill" cx="50" cy="50" r="${r}" stroke-dasharray="${dashLen} 500" stroke-dashoffset="${-dashOffset}" />
@@ -625,23 +853,20 @@ class HomeWeatherPanel extends HTMLElement {
     `;
   }
 
-  _renderRoomCard(room) {
+  _renderRoomCard(room, asSubCard = false) {
     const temp = room.temp != null ? room.temp.toFixed(1) : "—";
     const humidity = room.humidity != null ? room.humidity.toFixed(0) : "—";
-    const targetTemp = room.target_temp != null ? room.target_temp.toFixed(0) : null;
     const mode = room.climate_mode || "off";
     const hvacAction = room.hvac_action || null;
     const fanMode = room.fan_mode || null;
     const hasClimate = !!(room.climate_entity && !room.is_monitor_only);
-    const roomName = room.name || "Room";
+    const roomName = (asSubCard && room._roomNameForTts) ? room._roomNameForTts : (room.name || "Room");
     const unit = (room.temperature_unit || "°C").replace("°", "").toUpperCase() === "F" ? "°F" : "°C";
     const minT = room.min_temp ?? 16;
     const maxT = room.max_temp ?? 30;
     const allowedModes = this._allowedModes(room.hvac_modes);
     const fanModes = room.fan_modes || [];
 
-    const tempIcon = `<svg class="stat-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15 13V5c0-1.66-1.34-3-3-3S9 3.34 9 5v8c-1.21.91-2 2.37-2 4 0 2.76 2.24 5 5 5s5-2.24 5-5c0-1.63-.79-3.09-2-4zm-4-8c0-.55.45-1 1-1s1 .45 1 1h-1v1h1v2h-1v1h1v2h-2v-6z"/></svg>`;
-    const humidityIcon = `<svg class="stat-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`;
     const heatIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M13.5 1.67c.74 0 1.33.6 1.33 1.33 0 .67-.47 1.2-1.1 1.32L12 4.5 9.6 4.08c-.63-.12-1.1-.65-1.1-1.32 0-.73.59-1.33 1.33-1.33H13.5zM6 22.67c0 .73.59 1.33 1.33 1.33h9.34c.74 0 1.33-.6 1.33-1.33V12h-12v10.67zM14 14v6.67h-4V14h4z"/></svg>`;
     const coolIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M22 11h-4.17l3.24-3.24-1.41-1.41L16 9.34V5h-2v4.34l-3.83-3.83-1.41 1.41L10.17 11H6v2h4.17l-3.24 3.24 1.41 1.41L14 14.66V19h2v-4.34l3.83 3.83 1.41-1.41L17.83 13H22z"/></svg>`;
     const dryIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`;
@@ -650,52 +875,70 @@ class HomeWeatherPanel extends HTMLElement {
 
     const modeIcons = { heat: heatIcon, cool: coolIcon, dry: dryIcon, fan_only: fanIcon, off: offIcon };
     const currentTarget = room.target_temp != null ? room.target_temp : (minT + maxT) / 2;
+    const modesForRow = asSubCard ? this._allowedModes(room.hvac_modes, true) : this._allowedModes(room.hvac_modes);
+    const fanSliderModes = this._fanSliderModes(fanModes);
+    const useFanSlider = fanSliderModes.length >= 2;
+    const fanSliderValue = (() => { const idx = fanSliderModes.indexOf(String(fanMode || "").toLowerCase()); return idx >= 0 ? idx : 0; })();
 
-    return `
-      <div class="room-card" data-room-id="${this._escapeHtml(room.id || "")}">
-        <h3 class="room-name">${this._escapeHtml(roomName)}</h3>
-        ${hasClimate ? this._renderTempWheel(room) : ""}
-        ${hasClimate ? `
-          <div class="temp-buttons">
-            <button class="temp-btn" data-action="temp-down" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}" data-min="${minT}" data-max="${maxT}" data-target="${currentTarget}">−</button>
-            <button class="temp-btn" data-action="temp-up" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}" data-min="${minT}" data-max="${maxT}" data-target="${currentTarget}">+</button>
-          </div>
-        ` : ""}
+    const content = `
+      ${hasClimate ? this._renderTempWheel(room) : ""}
+      ${hasClimate ? `
+        <div class="temp-buttons">
+          <button class="temp-btn" data-action="temp-down" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}" data-min="${minT}" data-max="${maxT}" data-target="${currentTarget}">−</button>
+          <button class="temp-btn" data-action="temp-up" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}" data-min="${minT}" data-max="${maxT}" data-target="${currentTarget}">+</button>
+        </div>
+      ` : ""}
+      ${!asSubCard ? `
         <div class="room-stats">
           <div class="room-stat">
-            ${tempIcon}
+            <svg class="stat-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15 13V5c0-1.66-1.34-3-3-3S9 3.34 9 5v8c-1.21.91-2 2.37-2 4 0 2.76 2.24 5 5 5s5-2.24 5-5c0-1.63-.79-3.09-2-4zm-4-8c0-.55.45-1 1-1s1 .45 1 1h-1v1h1v2h-1v1h1v2h-2v-6z"/></svg>
             <div class="room-stat-inner">
               <span class="room-stat-value">${temp}</span>
               <span class="room-stat-unit">${unit}</span>
             </div>
           </div>
           <div class="room-stat">
-            ${humidityIcon}
+            <svg class="stat-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
             <div class="room-stat-inner">
               <span class="room-stat-value">${humidity}</span>
               <span class="room-stat-unit">%</span>
             </div>
           </div>
         </div>
-        <div class="room-state-row">
-          ${room.is_monitor_only ? `<span class="state-badge">Monitor</span>` : ""}
-          ${!room.is_monitor_only && hvacAction ? `<span class="state-badge state-action">${this._hvacActionLabel(hvacAction)}</span>` : ""}
-          ${!room.is_monitor_only && fanMode ? `<span class="state-badge state-fan">Fan: ${this._escapeHtml(fanMode)}</span>` : ""}
+      ` : ""}
+      <div class="room-state-row">
+        ${room.is_monitor_only ? `<span class="state-badge">Monitor</span>` : ""}
+        ${!room.is_monitor_only && hvacAction ? `<span class="state-badge state-action">${this._hvacActionLabel(hvacAction)}</span>` : ""}
+        ${!room.is_monitor_only && fanMode ? `<span class="state-badge state-fan">Fan: ${this._escapeHtml(fanMode)}</span>` : ""}
+      </div>
+      ${hasClimate ? `
+        <div class="room-controls">
+          ${modesForRow.map((m) => `
+            <button class="ctrl-btn ${mode === m ? "active" : ""}" data-action="mode" data-hvac-mode="${m}" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}">${modeIcons[m] || offIcon}<span>${this._modeLabel(m)}</span></button>
+          `).join("")}
         </div>
-        ${hasClimate ? `
-          <div class="room-controls">
-            ${allowedModes.map((m) => `
-              <button class="ctrl-btn ${mode === m ? "active" : ""}" data-action="mode" data-hvac-mode="${m}" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}">${modeIcons[m] || offIcon}<span>${this._modeLabel(m)}</span></button>
+        ${fanModes.length > 0 ? (useFanSlider ? `
+          <div class="fan-slider-wrap">
+            <input type="range" min="0" max="${Math.max(0, fanSliderModes.length - 1)}" step="1" value="${fanSliderValue}" data-action="fan-slider" data-entity="${this._escapeHtml(room.climate_entity)}" data-modes="${this._escapeHtml(fanSliderModes.join(","))}">
+            <div class="fan-slider-labels">${fanSliderModes.map((m) => `<span>${m}</span>`).join("")}</div>
+          </div>
+        ` : `
+          <div class="fan-controls">
+            ${fanModes.map((fm) => `
+              <button class="ctrl-btn fan-btn ${fanMode === fm ? "active" : ""}" data-action="fan" data-fan-mode="${this._escapeHtml(fm)}" data-entity="${this._escapeHtml(room.climate_entity)}">${fm}</button>
             `).join("")}
           </div>
-          ${fanModes.length > 0 ? `
-            <div class="fan-controls">
-              ${fanModes.map((fm) => `
-                <button class="ctrl-btn fan-btn ${fanMode === fm ? "active" : ""}" data-action="fan" data-fan-mode="${this._escapeHtml(fm)}" data-entity="${this._escapeHtml(room.climate_entity)}">${fm}</button>
-              `).join("")}
-            </div>
-          ` : ""}
-        ` : ""}
+        `) : ""}
+      ` : ""}
+    `;
+
+    if (asSubCard) {
+      return content;
+    }
+    return `
+      <div class="room-card" data-room-id="${this._escapeHtml(room.id || "")}">
+        <h3 class="room-name">${this._escapeHtml(roomName)}</h3>
+        ${content}
       </div>
     `;
   }
@@ -730,6 +973,31 @@ class HomeWeatherPanel extends HTMLElement {
   }
 
   _bindRoomControls(root) {
+    root.querySelectorAll(".onoff-toggle").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const entity = e.currentTarget.dataset.entity;
+        const roomName = e.currentTarget.dataset.roomName || "Room";
+        const isOn = e.currentTarget.dataset.isOn === "true";
+        if (!entity) return;
+        if (isOn) {
+          this._setClimateAndAnnounce(entity, "turn_off", "off", roomName);
+        } else {
+          this._setClimateAndAnnounce(entity, "turn_on", null, roomName);
+        }
+      });
+    });
+
+    root.querySelectorAll("[data-action='fan-slider']").forEach((input) => {
+      input.addEventListener("change", (e) => {
+        const entity = e.currentTarget.dataset.entity;
+        const modesStr = e.currentTarget.dataset.modes || "";
+        const modes = modesStr.split(",").filter(Boolean);
+        const idx = parseInt(e.currentTarget.value, 10);
+        const fanMode = modes[idx];
+        if (entity && fanMode) this._setFanMode(entity, fanMode);
+      });
+    });
+
     root.querySelectorAll(".ctrl-btn").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         const entity = e.currentTarget.dataset.entity;
@@ -795,17 +1063,17 @@ class HomeWeatherPanel extends HTMLElement {
 
       const onDown = (e) => {
         e.preventDefault();
-        const norm = getNormFromEvent(e);
-        handleSetTemp(norm);
+        let lastNorm = getNormFromEvent(e);
         const onMove = (ev) => {
           ev.preventDefault();
-          handleSetTemp(getNormFromEvent(ev));
+          lastNorm = getNormFromEvent(ev);
         };
         const onUp = () => {
           document.removeEventListener("mousemove", onMove);
           document.removeEventListener("mouseup", onUp);
           document.removeEventListener("touchmove", onMove, { passive: false });
           document.removeEventListener("touchend", onUp);
+          handleSetTemp(lastNorm);
         };
         document.addEventListener("mousemove", onMove);
         document.addEventListener("mouseup", onUp);
@@ -859,8 +1127,22 @@ class HomeWeatherPanel extends HTMLElement {
       .btn-save:hover { background: var(--accent-hover); }
       .btn-add { padding: 8px 14px; background: rgba(124,58,237,0.2); color: var(--accent); border: 1px solid var(--accent); border-radius: 8px; cursor: pointer; font-size: 12px; margin-bottom: 12px; }
       .btn-add:hover { background: var(--accent-dim); }
-      .room-row { padding: 16px; background: rgba(0,0,0,0.15); border-radius: 8px; margin-bottom: 14px; }
-      .appliance-card { padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--card-border); }
+      .btn-delete { padding: 6px 12px; background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.4); border-radius: 6px; cursor: pointer; font-size: 11px; }
+      .btn-delete:hover { background: rgba(239,68,68,0.25); }
+      .room-row { padding: 0; background: rgba(0,0,0,0.15); border-radius: 8px; margin-bottom: 14px; border: 1px solid var(--card-border); overflow: hidden; }
+      .room-row-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; cursor: pointer; user-select: none; }
+      .room-row-header:hover { background: rgba(255,255,255,0.03); }
+      .room-row-header .chevron { transition: transform 0.2s; }
+      .room-row.collapsed .room-row-header .chevron { transform: rotate(-90deg); }
+      .room-row-content { padding: 0 16px 16px; }
+      .room-row.collapsed .room-row-content { display: none; }
+      .appliance-card { padding: 0; background: rgba(0,0,0,0.2); border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--card-border); overflow: hidden; }
+      .appliance-card-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; cursor: pointer; user-select: none; }
+      .appliance-card-header:hover { background: rgba(255,255,255,0.03); }
+      .appliance-card-header .chevron { transition: transform 0.2s; }
+      .appliance-card.collapsed .appliance-card-header .chevron { transform: rotate(-90deg); }
+      .appliance-card-content { padding: 12px; }
+      .appliance-card.collapsed .appliance-card-content { display: none; }
       .tts-event-row { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
       .tts-event-row .form-input { flex: 1; min-width: 200px; }
       .tts-toggle { min-width: 50px; }
@@ -934,8 +1216,18 @@ class HomeWeatherPanel extends HTMLElement {
     ];
     const appliances = room.appliances || [];
 
+    const roomKey = `room-${index}`;
+    const isCollapsed = this._collapsedRooms.has(roomKey);
     return `
-      <div class="room-row" data-room-index="${index}" data-room-id="${this._escapeHtml(roomId)}">
+      <div class="room-row ${isCollapsed ? "collapsed" : ""}" data-room-index="${index}" data-room-id="${this._escapeHtml(roomId)}" data-collapse-key="${roomKey}">
+        <div class="room-row-header" data-action="toggle-room" data-key="${roomKey}">
+          <span>${this._escapeHtml(room.name || "Unnamed room")}</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button class="btn-delete" data-action="delete-room" data-room-index="${index}" data-room-name="${this._escapeHtml(room.name || "room")}">Delete</button>
+            <svg class="chevron" width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+          </div>
+        </div>
+        <div class="room-row-content">
         <div class="form-group">
           <label class="form-label">Room name</label>
           <input type="text" class="form-input" data-field="name" value="${this._escapeHtml(room.name || "")}" placeholder="e.g. Bedroom">
@@ -967,6 +1259,7 @@ class HomeWeatherPanel extends HTMLElement {
         <div class="appliances-list">
           ${appliances.map((app, ai) => this._renderApplianceCard(room, app, ai, index, entities)).join("")}
         </div>
+        </div>
       </div>
     `;
   }
@@ -983,9 +1276,20 @@ class HomeWeatherPanel extends HTMLElement {
     const zoneOpts = (entities.zones || []).map(z => `<option value="${z.entity_id}" ${(app.automation?.zone || "") === z.entity_id ? "selected" : ""}>${this._escapeHtml(z.friendly_name || z.entity_id)}</option>`).join("");
     const sensorOpts = (entities.sensors || []).filter(s => (s.unit || "").includes("°") || (s.unit || "").toLowerCase().includes("c")).map(s => `<option value="${s.entity_id}" ${(app.automation?.outdoor_temp_sensor || "") === s.entity_id ? "selected" : ""}>${this._escapeHtml(s.friendly_name || s.entity_id)}</option>`).join("");
     const auto = app.automation || {};
+    const appKey = `app-${roomIndex}-${appIndex}`;
+    const isAppCollapsed = this._collapsedAppliances.has(appKey);
+    const appLabel = (app.custom_name || "").trim() || (app.device_type ? String(app.device_type).charAt(0).toUpperCase() + String(app.device_type).slice(1) : "Appliance");
 
     return `
-      <div class="appliance-card" data-room-index="${roomIndex}" data-app-index="${appIndex}">
+      <div class="appliance-card ${isAppCollapsed ? "collapsed" : ""}" data-room-index="${roomIndex}" data-app-index="${appIndex}" data-collapse-key="${appKey}">
+        <div class="appliance-card-header" data-action="toggle-appliance" data-key="${appKey}">
+          <span>${this._escapeHtml(appLabel)}</span>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button class="btn-delete" data-action="delete-appliance" data-room-index="${roomIndex}" data-app-index="${appIndex}" data-app-name="${this._escapeHtml(appLabel)}">Delete</button>
+            <svg class="chevron" width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+          </div>
+        </div>
+        <div class="appliance-card-content">
         <div class="form-group">
           <label class="form-label">Device type</label>
           <select class="form-select" data-field="device_type">
@@ -1056,6 +1360,7 @@ class HomeWeatherPanel extends HTMLElement {
         <div class="form-group">
           <label class="form-label">Winter end (MM-DD)</label>
           <input type="text" class="form-input" data-field="date_winter_end" value="${auto.date_winter_end || "03-31"}">
+        </div>
         </div>
       </div>
     `;

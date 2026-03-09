@@ -248,7 +248,7 @@ async def websocket_get_dashboard_data(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Get dashboard data: flattened room+appliance cards (monitor-only or appliance)."""
+    """Get dashboard data: nested rooms with appliances (parent room + appliance sub-cards)."""
     config_manager = hass.data.get(DOMAIN, {}).get("config_manager")
     if not config_manager:
         connection.send_result(msg["id"], {"rooms": []})
@@ -278,29 +278,7 @@ async def websocket_get_dashboard_data(
                     pass
 
         appliances = room.get("appliances") or []
-        if not appliances:
-            rooms_data.append({
-                "id": room.get("id"),
-                "name": room.get("name"),
-                "temp_sensor": room.get("temp_sensor"),
-                "humidity_sensor": room.get("humidity_sensor"),
-                "temp": temp,
-                "humidity": humidity,
-                "is_monitor_only": True,
-                "climate_entity": None,
-                "target_temp": None,
-                "hvac_action": None,
-                "fan_mode": None,
-                "climate_mode": None,
-                "min_temp": 16,
-                "max_temp": 30,
-                "hvac_modes": [],
-                "fan_modes": [],
-                "temperature_unit": temp_unit,
-                "device_type": None,
-                "device_name": None,
-            })
-            continue
+        appliances_data = []
 
         for appliance in appliances:
             climate_entity = (appliance.get("climate_entity") or "").strip()
@@ -313,16 +291,12 @@ async def websocket_get_dashboard_data(
                     climate_current_temp = None
             use_temp = temp if temp is not None else climate_current_temp
 
-            rooms_data.append({
-                "id": room.get("id"),
-                "name": room.get("name"),
+            appliances_data.append({
                 "appliance_id": appliance.get("id"),
-                "temp_sensor": room.get("temp_sensor"),
-                "humidity_sensor": room.get("humidity_sensor"),
-                "temp": use_temp,
-                "humidity": humidity,
-                "is_monitor_only": False,
+                "device_type": appliance.get("device_type", "minisplit"),
+                "device_name": config_manager.get_device_name(appliance),
                 "climate_entity": climate_entity or None,
+                "temp": use_temp,
                 "target_temp": climate_data.get("target_temp"),
                 "hvac_action": climate_data.get("hvac_action"),
                 "fan_mode": climate_data.get("fan_mode"),
@@ -331,10 +305,19 @@ async def websocket_get_dashboard_data(
                 "max_temp": climate_data.get("max_temp", 30),
                 "hvac_modes": climate_data.get("hvac_modes", []),
                 "fan_modes": climate_data.get("fan_modes", []),
-                "temperature_unit": temp_unit,
-                "device_type": appliance.get("device_type", "minisplit"),
-                "device_name": config_manager.get_device_name(appliance),
             })
+
+        rooms_data.append({
+            "id": room.get("id"),
+            "name": room.get("name"),
+            "temp_sensor": room.get("temp_sensor"),
+            "humidity_sensor": room.get("humidity_sensor"),
+            "temp": temp,
+            "humidity": humidity,
+            "temperature_unit": temp_unit,
+            "is_monitor_only": len(appliances_data) == 0,
+            "appliances": appliances_data,
+        })
 
     connection.send_result(msg["id"], {"rooms": rooms_data})
 
