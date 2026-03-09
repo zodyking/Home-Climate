@@ -35,18 +35,6 @@ Climate monitoring and automation for Home Assistant. A beautiful dashboard to m
 
 Add the integration and the **Home Climate** panel will appear in your sidebar. Configure rooms, automation thresholds, presence rules, and TTS via the settings gear (admin only).
 
-## Development
-
-The dashboard is built with Vue 3. To rebuild after editing the frontend:
-
-```bash
-cd custom_components/home_climate
-npm install
-npm run build
-```
-
-The built `home-climate-panel.js` is output to `frontend/`. A vanilla JS backup is kept as `frontend/home-climate-panel.vanilla.js`.
-
 ## Links
 
 - [Documentation](https://github.com/zodyking/Home-Climate)
