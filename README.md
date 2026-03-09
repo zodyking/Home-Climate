@@ -16,11 +16,14 @@ Climate monitoring and automation for Home Assistant. A beautiful dashboard to m
 ### HACS (Recommended)
 
 1. Open HACS in your Home Assistant instance
-2. Go to **Integrations** → **Explore & Download Repositories**
-3. Search for **Home Weather**
-4. Click **Download**
-5. Restart Home Assistant
-6. Go to **Settings** → **Devices & Services** → **Add Integration** → search for **Home Weather**
+2. Go to **Settings** → **Repositories**
+3. Click **+ Add repository**
+4. Enter: `https://github.com/zodyking/Home-Climate`
+5. Select category: **Integration** → **Add** → **Close**
+6. Go to **Integrations** → **+ Explore & Download Repositories**
+7. Search for **Home Weather** (or find it under your added repositories)
+8. Click **Download** → Restart Home Assistant
+9. Go to **Settings** → **Devices & Services** → **Add Integration** → search for **Home Weather**
 
 ### Manual
 

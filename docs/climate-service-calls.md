@@ -1,24 +1,39 @@
-# Turn off climate device
+# Climate Service Calls
+
+Reference for Home Assistant climate entities used by the Home Weather integration.
+
+## Turn off climate device
+
+```yaml
 action: climate.turn_off
 target:
   entity_id: climate.minisplit_blank_test
 data: {}
+```
 
-# Turn on Climate device
+## Turn on climate device
+
+```yaml
 action: climate.turn_on
 target:
   entity_id:
     - climate.minisplit_blank_test
 data: {}
+```
 
-# Set fan mode
+## Set fan mode
+
+```yaml
 action: climate.set_fan_mode
 data:
   fan_mode: high
 target:
   entity_id: climate.ir_bridge_mini_split
+```
 
-# set target tempature w/mode
+## Set target temperature with mode
+
+```yaml
 action: climate.set_temperature
 target:
   entity_id:
@@ -26,11 +41,14 @@ target:
 data:
   temperature: 82
   hvac_mode: heat
+```
 
-#Set mode only
+## Set mode only
+
+```yaml
 action: climate.set_hvac_mode
 target:
-  entity_id:
-    - climate.ir_bridge_mini_split
+  entity_id: climate.ir_bridge_mini_split
 data:
   hvac_mode: cool
+```
