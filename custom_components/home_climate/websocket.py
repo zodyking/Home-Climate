@@ -301,6 +301,7 @@ async def websocket_get_dashboard_data(
                 "hvac_action": climate_data.get("hvac_action"),
                 "fan_mode": climate_data.get("fan_mode"),
                 "climate_mode": climate_data.get("climate_mode"),
+                "climate_state": climate_data.get("climate_state"),
                 "min_temp": climate_data.get("min_temp", 16),
                 "max_temp": climate_data.get("max_temp", 30),
                 "hvac_modes": climate_data.get("hvac_modes", []),
