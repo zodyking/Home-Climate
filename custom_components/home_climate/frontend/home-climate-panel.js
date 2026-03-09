@@ -147,32 +147,48 @@ const STYLES = `
   }
   .onoff-toggle:not(.on) .toggle-dot { transform: translateX(-7px); }
   .onoff-toggle.on .toggle-dot { transform: translateX(7px); }
-  .fan-slider-wrap {
-    margin-top: clamp(8px, 1.5vw, 12px);
-    width: 100%;
-    max-width: 200px;
+  .fan-badge-btn {
+    all: unset;
+    cursor: pointer;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--card-border);
+    font-size: inherit;
+    color: inherit;
+    opacity: 0.9;
   }
-  .fan-slider-wrap input[type="range"] {
-    width: 100%;
-    height: 6px;
-    -webkit-appearance: none;
-    background: rgba(255,255,255,0.12);
-    border-radius: 3px;
+  .fan-badge-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--accent);
   }
-  .fan-slider-wrap input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: var(--accent);
+  .fan-popover {
+    position: fixed;
+    z-index: 9999;
+    min-width: 120px;
+    padding: 6px 0;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    box-shadow: var(--card-shadow);
+  }
+  .fan-popover-option {
+    display: block;
+    width: 100%;
+    padding: 8px 14px;
+    border: none;
+    background: none;
+    color: inherit;
+    font-size: 13px;
+    text-align: left;
     cursor: pointer;
   }
-  .fan-slider-labels {
-    display: flex;
-    justify-content: space-between;
-    font-size: 10px;
-    opacity: 0.8;
-    margin-top: 4px;
+  .fan-popover-option:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+  .fan-popover-option.active {
+    background: var(--accent-dim);
+    color: var(--accent);
   }
   .device-name {
     font-size: clamp(14px, 2.2vw, 16px);
@@ -213,6 +229,7 @@ const STYLES = `
   .temp-wheel-svg {
     width: 100%;
     height: 100%;
+    cursor: pointer;
     transform: rotate(-135deg);
   }
   .temp-wheel-track {
@@ -257,6 +274,11 @@ const STYLES = `
     opacity: 0.7;
     margin-top: 2px;
   }
+  .temp-wheel-wrap.temp-wheel-disabled {
+    pointer-events: none;
+    opacity: 0.6;
+  }
+  .temp-buttons.temp-buttons-hidden { display: none; }
   .temp-buttons {
     display: flex;
     align-items: center;
@@ -373,6 +395,7 @@ const STYLES = `
     transition: all 0.2s;
   }
   .ctrl-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ctrl-btn[data-action="mode"] { min-width: 42px; }
   .ctrl-btn:hover {
     background: rgba(255, 255, 255, 0.08);
   }
@@ -520,11 +543,103 @@ class HomeWeatherPanel extends HTMLElement {
     if (!this._hass || this._showSettings) return;
     try {
       const res = await this._hass.callWS({ type: "home_climate/get_dashboard_data" });
+      const prevData = this._dashboardData;
       this._dashboardData = res;
-      if (!this._loading) this._render();
+
+      if (!this._loading) {
+        const root = this.shadowRoot;
+        const grid = root?.querySelector(".rooms-grid");
+        const canPatch = grid && !this._showSettings && prevData?.rooms?.length > 0;
+
+        if (canPatch && this._patchDashboardData(res, prevData)) {
+          return;
+        }
+        this._render();
+      }
     } catch (e) {
       console.error("Home Climate dashboard data error:", e);
     }
+  }
+
+  _patchDashboardData(newData, prevData) {
+    const root = this.shadowRoot;
+    if (!root || !newData?.rooms || !prevData?.rooms) return false;
+
+    const newRooms = newData.rooms || [];
+    const prevRooms = prevData.rooms || [];
+
+    if (newRooms.length !== prevRooms.length) return false;
+    const structureMatch = newRooms.every((r, i) => {
+      const pr = prevRooms[i];
+      if (!pr || r.id !== pr.id) return false;
+      const newApps = r.appliances || [];
+      const prevApps = pr.appliances || [];
+      if (newApps.length !== prevApps.length) return false;
+      return newApps.every((a, j) => (prevApps[j]?.climate_entity || "") === (a.climate_entity || ""));
+    });
+    if (!structureMatch) return false;
+
+    for (const room of newRooms) {
+      const roomCard = Array.from(root.querySelectorAll(".room-card-parent")).find((el) => (el.dataset.roomId || "") === (room.id || ""));
+      if (!roomCard) continue;
+
+      const statValues = roomCard.querySelectorAll(".room-stat-value");
+      if (statValues.length >= 2) {
+        statValues[0].textContent = room.temp != null ? room.temp.toFixed(1) : "—";
+        statValues[1].textContent = room.humidity != null ? room.humidity.toFixed(0) : "—";
+      }
+
+      for (const app of room.appliances || []) {
+        const entity = app.climate_entity || "";
+        const appCard = Array.from(roomCard.querySelectorAll(".appliance-subcard")).find((el) => (el.dataset.entity || "") === entity);
+        if (!appCard) continue;
+
+        const isOn = (app.climate_mode || app.climate_state || "off") !== "off";
+        const mode = app.climate_mode || "off";
+        const fanMode = app.fan_mode || "";
+        const fanModes = app.fan_modes || [];
+        const appUnit = (room.temperature_unit || "°C").replace("°", "").toUpperCase() === "F" ? "°F" : "°C";
+        const roomTemp = app.temp != null ? app.temp.toFixed(1) : "—";
+        const isFanOnly = mode === "fan_only";
+        const targetDisplay = isFanOnly ? "—" : `${app.target_temp != null ? Math.round(app.target_temp) : "—"}${appUnit}`;
+
+        const toggle = appCard.querySelector(".onoff-toggle");
+        if (toggle) {
+          toggle.classList.toggle("on", isOn);
+          toggle.dataset.isOn = isOn;
+          toggle.setAttribute("aria-label", isOn ? "Turn off" : "Turn on");
+        }
+
+        appCard.querySelectorAll(".ctrl-btn[data-action='mode']").forEach((btn) => {
+          const m = btn.dataset.hvacMode;
+          btn.classList.toggle("active", mode === m);
+        });
+
+        const fanBtn = appCard.querySelector("[data-action='fan-popover']");
+        if (fanBtn) {
+          fanBtn.textContent = `Fan: ${fanMode || "—"}`;
+          fanBtn.dataset.fanMode = fanMode;
+        }
+
+        const wheelWrap = appCard.querySelector(".temp-wheel-wrap");
+        if (wheelWrap) {
+          wheelWrap.classList.toggle("temp-wheel-disabled", isFanOnly);
+          wheelWrap.dataset.disabled = isFanOnly;
+          const targetEl = wheelWrap.querySelector(".temp-wheel-target");
+          const roomEl = wheelWrap.querySelector(".temp-wheel-room");
+          if (targetEl) targetEl.textContent = targetDisplay;
+          if (roomEl) roomEl.textContent = `Room − ${roomTemp}${appUnit}`;
+        }
+
+        const tempBtns = appCard.querySelector(".temp-buttons");
+        if (tempBtns) {
+          tempBtns.classList.toggle("temp-buttons-hidden", isFanOnly);
+          tempBtns.dataset.fanOnly = isFanOnly;
+        }
+      }
+    }
+
+    return true;
   }
 
   async _setClimateAndAnnounce(entityId, service, hvacMode, roomName) {
@@ -785,7 +900,7 @@ class HomeWeatherPanel extends HTMLElement {
       temperature_unit: room.temperature_unit,
       _roomNameForTts: room.name || "Room",
     };
-    const isOn = (appliance.climate_mode || "off") !== "off";
+    const isOn = (appliance.climate_mode || appliance.climate_state || "off") !== "off";
     const entity = this._escapeHtml(appliance.climate_entity || "");
     const roomName = this._escapeHtml(room.name || "Room");
     return `
@@ -821,21 +936,17 @@ class HomeWeatherPanel extends HTMLElement {
     return allowed;
   }
 
-  _fanSliderModes(fanModes) {
-    const order = ["low", "medium", "high"];
-    const normalized = (fanModes || []).map((m) => String(m).toLowerCase());
-    return order.filter((m) => normalized.includes(m));
-  }
-
   _renderTempWheel(room) {
     const minT = room.min_temp ?? 16;
     const maxT = room.max_temp ?? 30;
+    const mode = room.climate_mode || "off";
+    const isFanOnly = mode === "fan_only";
     const target = room.target_temp != null ? Math.round(room.target_temp) : Math.round((minT + maxT) / 2);
     const range = maxT - minT || 1;
-    const norm = Math.max(0, Math.min(1, (target - minT) / range));
+    const norm = isFanOnly ? 0 : Math.max(0, Math.min(1, (target - minT) / range));
     const unit = (room.temperature_unit || "°C").replace("°", "").toUpperCase() === "F" ? "°F" : "°C";
     const roomTemp = room.temp != null ? room.temp.toFixed(1) : "—";
-    const mode = room.climate_mode || "off";
+    const targetDisplay = isFanOnly ? "—" : `${target}${unit}`;
 
     const r = 45;
     const circum = 2 * Math.PI * r;
@@ -851,15 +962,16 @@ class HomeWeatherPanel extends HTMLElement {
     const modeLabel = mode !== "off" ? this._modeLabel(mode) : "";
 
     const ttsRoomName = room._roomNameForTts || room.name || "Room";
+    const disabledClass = isFanOnly ? " temp-wheel-disabled" : "";
     return `
-      <div class="temp-wheel-wrap" data-entity="${this._escapeHtml(room.climate_entity || "")}" data-room-name="${this._escapeHtml(ttsRoomName)}" data-min="${minT}" data-max="${maxT}" data-target="${target}">
+      <div class="temp-wheel-wrap${disabledClass}" data-entity="${this._escapeHtml(room.climate_entity || "")}" data-room-name="${this._escapeHtml(ttsRoomName)}" data-min="${minT}" data-max="${maxT}" data-target="${target}" data-disabled="${isFanOnly}">
         <svg class="temp-wheel-svg" viewBox="0 0 100 100" aria-hidden="true">
           <circle class="temp-wheel-track" cx="50" cy="50" r="${r}" />
           <circle class="temp-wheel-fill" cx="50" cy="50" r="${r}" stroke-dasharray="${dashLen} 500" stroke-dashoffset="${-dashOffset}" />
           <circle class="temp-wheel-knob" cx="${knobX}" cy="${knobY}" r="6" data-wheel-knob />
         </svg>
         <div class="temp-wheel-inner">
-          <span class="temp-wheel-target">${target}${unit}</span>
+          <span class="temp-wheel-target">${targetDisplay}</span>
           ${modeLabel ? `<span class="temp-wheel-mode">${modeLabel}</span>` : ""}
           <span class="temp-wheel-room">Room − ${roomTemp}${unit}</span>
         </div>
@@ -881,23 +993,21 @@ class HomeWeatherPanel extends HTMLElement {
     const allowedModes = this._allowedModes(room.hvac_modes);
     const fanModes = room.fan_modes || [];
 
-    const heatIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M13.5 1.67c.74 0 1.33.6 1.33 1.33 0 .67-.47 1.2-1.1 1.32L12 4.5 9.6 4.08c-.63-.12-1.1-.65-1.1-1.32 0-.73.59-1.33 1.33-1.33H13.5zM6 22.67c0 .73.59 1.33 1.33 1.33h9.34c.74 0 1.33-.6 1.33-1.33V12h-12v10.67zM14 14v6.67h-4V14h4z"/></svg>`;
-    const coolIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M22 11h-4.17l3.24-3.24-1.41-1.41L16 9.34V5h-2v4.34l-3.83-3.83-1.41 1.41L10.17 11H6v2h4.17l-3.24 3.24 1.41 1.41L14 14.66V19h2v-4.34l3.83 3.83 1.41-1.41L17.83 13H22z"/></svg>`;
-    const dryIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`;
-    const fanIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-12c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>`;
-    const offIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M18 14.49V9c0-1.1-.9-2-2-2h-3.15l-1.6-1.6L10 7h4v2H6v2h8v2H6v2h8v2H6v2h10c1.1 0 2-.9 2-2v-5.51l2 2z"/></svg>`;
+    /* Material Design style icons - fire, snowflake, water-off, fan, power */
+    const heatIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17.66 11L12 21l-5.66-10C5.22 11 4 12.5 4 14.5c0 2.5 2 4.5 4.5 4.5H19c2.21 0 4-1.79 4-4 0-1.56-.88-2.93-2.17-3.61z"/></svg>`;
+    const coolIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 1.81A2.5 2.5 0 0 1 13 6.5a2.5 2.5 0 0 1-1 2A2.5 2.5 0 0 1 11 6.5a2.5 2.5 0 0 1 1-4.69m0 8.69a2.5 2.5 0 0 1 1 2 2.5 2.5 0 0 1-1 2 2.5 2.5 0 0 1-1-2 2.5 2.5 0 0 1 1-2m0 8.69a2.5 2.5 0 0 1 1 2 2.5 2.5 0 0 1-1 2 2.5 2.5 0 0 1-1-2 2.5 2.5 0 0 1 1-2M5 12.5a2.5 2.5 0 0 1 1 2 2.5 2.5 0 0 1-1 2 2.5 2.5 0 0 1-1-2 2.5 2.5 0 0 1 1-2m14 0a2.5 2.5 0 0 1 1 2 2.5 2.5 0 0 1-1 2 2.5 2.5 0 0 1-1-2 2.5 2.5 0 0 1 1-2M12 5a2.5 2.5 0 0 1 2 1 2.5 2.5 0 0 1-2 1 2.5 2.5 0 0 1-2-1 2.5 2.5 0 0 1 2-1m0 14a2.5 2.5 0 0 1 2 1 2.5 2.5 0 0 1-2 1 2.5 2.5 0 0 1-2-1 2.5 2.5 0 0 1 2-1m-7-7a2.5 2.5 0 0 1 2 1 2.5 2.5 0 0 1-2 1 2.5 2.5 0 0 1-2-1 2.5 2.5 0 0 1 2-1m14 0a2.5 2.5 0 0 1 2 1 2.5 2.5 0 0 1-2 1 2.5 2.5 0 0 1-2-1 2.5 2.5 0 0 1 2-1z"/></svg>`;
+    const dryIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.69c.75.75 1.27 1.6 1.65 2.52.36.88.63 1.78.63 2.79a5.5 5.5 0 0 1-11 0c0-1.01.27-1.91.63-2.79.38-.92.9-1.77 1.65-2.52m0 1.81c-.65.65-1.14 1.39-1.44 2.16-.28.72-.49 1.47-.49 2.2a4 4 0 0 0 8 0c0-.73-.21-1.48-.49-2.2-.3-.77-.79-1.51-1.44-2.16M7 18l-4-4 1.41-1.41L7 14.17l9.59-9.59L18 6l-11 11z"/></svg>`;
+    const fanIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 10c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3zm0 4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-10c-4.42 0-8 3.58-8 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/></svg>`;
+    const offIcon = `<svg class="ctrl-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.58-5.42L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"/></svg>`;
 
     const modeIcons = { heat: heatIcon, cool: coolIcon, dry: dryIcon, fan_only: fanIcon, off: offIcon };
     const currentTarget = room.target_temp != null ? room.target_temp : (minT + maxT) / 2;
     const modesForRow = asSubCard ? this._allowedModes(room.hvac_modes, true) : this._allowedModes(room.hvac_modes);
-    const fanSliderModes = this._fanSliderModes(fanModes);
-    const useFanSlider = fanSliderModes.length >= 2;
-    const fanSliderValue = (() => { const idx = fanSliderModes.indexOf(String(fanMode || "").toLowerCase()); return idx >= 0 ? idx : 0; })();
 
     const content = `
       ${hasClimate ? this._renderTempWheel(room) : ""}
       ${hasClimate ? `
-        <div class="temp-buttons">
+        <div class="temp-buttons ${mode === "fan_only" ? "temp-buttons-hidden" : ""}" data-fan-only="${mode === "fan_only"}">
           <button class="temp-btn" data-action="temp-down" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}" data-min="${minT}" data-max="${maxT}" data-target="${currentTarget}">−</button>
           <button class="temp-btn" data-action="temp-up" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}" data-min="${minT}" data-max="${maxT}" data-target="${currentTarget}">+</button>
         </div>
@@ -923,26 +1033,14 @@ class HomeWeatherPanel extends HTMLElement {
       <div class="room-state-row">
         ${room.is_monitor_only ? `<span class="state-badge">Monitor</span>` : ""}
         ${!room.is_monitor_only && hvacAction ? `<span class="state-badge state-action">${this._hvacActionLabel(hvacAction)}</span>` : ""}
-        ${!room.is_monitor_only && fanMode ? `<span class="state-badge state-fan">Fan: ${this._escapeHtml(fanMode)}</span>` : ""}
+        ${!room.is_monitor_only && fanModes.length > 0 ? `<button type="button" class="fan-badge-btn state-badge state-fan" data-action="fan-popover" data-entity="${this._escapeHtml(room.climate_entity)}" data-fan-mode="${this._escapeHtml(fanMode || "")}" data-fan-modes="${this._escapeHtml(fanModes.join(","))}" data-room-name="${this._escapeHtml(roomName)}">Fan: ${this._escapeHtml(fanMode || "—")}</button>` : ""}
       </div>
       ${hasClimate ? `
         <div class="room-controls">
           ${modesForRow.map((m) => `
-            <button class="ctrl-btn ${mode === m ? "active" : ""}" data-action="mode" data-hvac-mode="${m}" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}">${modeIcons[m] || offIcon}<span>${this._modeLabel(m)}</span></button>
+            <button class="ctrl-btn ${mode === m ? "active" : ""}" title="${this._escapeHtml(this._modeLabel(m))}" aria-label="${this._escapeHtml(this._modeLabel(m))}" data-action="mode" data-hvac-mode="${m}" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}">${modeIcons[m] || offIcon}</button>
           `).join("")}
         </div>
-        ${fanModes.length > 0 ? (useFanSlider ? `
-          <div class="fan-slider-wrap">
-            <input type="range" min="0" max="${Math.max(0, fanSliderModes.length - 1)}" step="1" value="${fanSliderValue}" data-action="fan-slider" data-entity="${this._escapeHtml(room.climate_entity)}" data-modes="${this._escapeHtml(fanSliderModes.join(","))}">
-            <div class="fan-slider-labels">${fanSliderModes.map((m) => `<span>${m}</span>`).join("")}</div>
-          </div>
-        ` : `
-          <div class="fan-controls">
-            ${fanModes.map((fm) => `
-              <button class="ctrl-btn fan-btn ${fanMode === fm ? "active" : ""}" data-action="fan" data-fan-mode="${this._escapeHtml(fm)}" data-entity="${this._escapeHtml(room.climate_entity)}">${fm}</button>
-            `).join("")}
-          </div>
-        `) : ""}
       ` : ""}
     `;
 
@@ -986,6 +1084,54 @@ class HomeWeatherPanel extends HTMLElement {
     }
   }
 
+  _closeFanPopover() {
+    const pop = this.shadowRoot?.querySelector(".fan-popover");
+    if (pop) pop.remove();
+    document.removeEventListener("click", this._fanPopoverOutsideClick);
+    document.removeEventListener("keydown", this._fanPopoverEscape);
+  }
+
+  _showFanPopover(btn) {
+    this._closeFanPopover();
+    const entity = btn.dataset.entity;
+    const fanModesStr = btn.dataset.fanModes || "";
+    const fanModes = fanModesStr.split(",").filter(Boolean);
+    const currentMode = (btn.dataset.fanMode || "").toLowerCase();
+    if (!entity || fanModes.length === 0) return;
+
+    const popover = document.createElement("div");
+    popover.className = "fan-popover";
+    popover.innerHTML = fanModes.map((fm) => {
+      const isActive = (fm || "").toLowerCase() === currentMode;
+      return `<button type="button" class="fan-popover-option ${isActive ? "active" : ""}" data-fan-mode="${this._escapeHtml(fm)}">${this._escapeHtml(fm)}</button>`;
+    }).join("");
+
+    const rect = btn.getBoundingClientRect();
+    popover.style.left = `${rect.left + (rect.width / 2) - 60}px`;
+    popover.style.top = `${rect.bottom + 4}px`;
+
+    fanModes.forEach((fm, i) => {
+      popover.children[i].addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._setFanMode(entity, fm);
+        this._closeFanPopover();
+      });
+    });
+
+    this.shadowRoot.appendChild(popover);
+
+    this._fanPopoverOutsideClick = (e) => {
+      if (!popover.contains(e.target) && e.target !== btn) this._closeFanPopover();
+    };
+    this._fanPopoverEscape = (e) => {
+      if (e.key === "Escape") this._closeFanPopover();
+    };
+    setTimeout(() => {
+      document.addEventListener("click", this._fanPopoverOutsideClick);
+      document.addEventListener("keydown", this._fanPopoverEscape);
+    }, 0);
+  }
+
   _bindRoomControls(root) {
     root.querySelectorAll(".onoff-toggle").forEach((btn) => {
       btn.addEventListener("click", (e) => {
@@ -1001,14 +1147,10 @@ class HomeWeatherPanel extends HTMLElement {
       });
     });
 
-    root.querySelectorAll("[data-action='fan-slider']").forEach((input) => {
-      input.addEventListener("change", (e) => {
-        const entity = e.currentTarget.dataset.entity;
-        const modesStr = e.currentTarget.dataset.modes || "";
-        const modes = modesStr.split(",").filter(Boolean);
-        const idx = parseInt(e.currentTarget.value, 10);
-        const fanMode = modes[idx];
-        if (entity && fanMode) this._setFanMode(entity, fanMode);
+    root.querySelectorAll("[data-action='fan-popover']").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._showFanPopover(e.currentTarget);
       });
     });
 
@@ -1017,17 +1159,12 @@ class HomeWeatherPanel extends HTMLElement {
         const entity = e.currentTarget.dataset.entity;
         const action = e.currentTarget.dataset.action;
         const roomName = e.currentTarget.dataset.roomName || "Room";
-        if (!entity && action !== "fan") return;
-        if (action === "mode") {
-          const hvacMode = e.currentTarget.dataset.hvacMode;
-          if (hvacMode === "off") {
-            this._setClimateAndAnnounce(entity, "turn_off", "off", roomName);
-          } else {
-            this._setClimateAndAnnounce(entity, "set_hvac_mode", hvacMode, roomName);
-          }
-        } else if (action === "fan") {
-          const fanMode = e.currentTarget.dataset.fanMode;
-          this._setFanMode(entity, fanMode);
+        if (!entity || action !== "mode") return;
+        const hvacMode = e.currentTarget.dataset.hvacMode;
+        if (hvacMode === "off") {
+          this._setClimateAndAnnounce(entity, "turn_off", "off", roomName);
+        } else {
+          this._setClimateAndAnnounce(entity, "set_hvac_mode", hvacMode, roomName);
         }
       });
     });
@@ -1048,14 +1185,13 @@ class HomeWeatherPanel extends HTMLElement {
       });
     });
 
-    root.querySelectorAll(".temp-wheel-wrap").forEach((wrap) => {
+    root.querySelectorAll(".temp-wheel-wrap:not(.temp-wheel-disabled)").forEach((wrap) => {
       const entity = wrap.dataset.entity;
       const roomName = wrap.dataset.roomName || "Room";
       const minT = parseFloat(wrap.dataset.min) || 16;
       const maxT = parseFloat(wrap.dataset.max) || 30;
       if (!entity) return;
       const svg = wrap.querySelector(".temp-wheel-svg");
-      const knob = wrap.querySelector(".temp-wheel-knob");
 
       const getNormFromEvent = (e) => {
         const rect = svg.getBoundingClientRect();
@@ -1077,6 +1213,7 @@ class HomeWeatherPanel extends HTMLElement {
 
       const onDown = (e) => {
         e.preventDefault();
+        e.stopPropagation();
         let lastNorm = getNormFromEvent(e);
         const onMove = (ev) => {
           ev.preventDefault();
@@ -1095,13 +1232,8 @@ class HomeWeatherPanel extends HTMLElement {
         document.addEventListener("touchend", onUp);
       };
 
-      knob?.addEventListener("mousedown", onDown);
-      knob?.addEventListener("touchstart", onDown, { passive: false });
-      svg?.addEventListener("click", (e) => {
-        if (e.target === knob) return;
-        const norm = getNormFromEvent(e);
-        handleSetTemp(norm);
-      });
+      svg?.addEventListener("mousedown", onDown);
+      svg?.addEventListener("touchstart", onDown, { passive: false });
     });
   }
 

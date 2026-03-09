@@ -67,6 +67,8 @@ async def async_send_tts_for_event(
         room.get("tts_overrides") or {}
     ).get(event) or msg_entry.get("template", "")
     if not template:
+        template = DEFAULT_TTS_MESSAGES.get(event, "")
+    if not template:
         return
 
     room_name = room.get("name") or "Room"
