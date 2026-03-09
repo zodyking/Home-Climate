@@ -85,6 +85,7 @@ const STYLES = `
   .room-card-parent {
     display: flex;
     flex-direction: column;
+    min-width: 0;
     background: var(--card-bg);
     border-radius: clamp(14px, 3vw, 18px);
     border: 1px solid var(--card-border);
@@ -99,6 +100,8 @@ const STYLES = `
     flex-direction: column;
     gap: clamp(16px, 2.5vw, 20px);
     margin-top: clamp(12px, 2vw, 16px);
+    min-width: 0;
+    width: 100%;
   }
   .appliance-subcard {
     position: relative;
@@ -106,6 +109,9 @@ const STYLES = `
     flex-direction: column;
     align-items: center;
     text-align: center;
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
     background: rgba(0, 0, 0, 0.15);
     border-radius: clamp(10px, 2vw, 12px);
     border: 1px solid var(--card-border);
@@ -342,28 +348,31 @@ const STYLES = `
   .room-controls {
     display: flex;
     flex-wrap: nowrap;
-    overflow-x: auto;
+    width: 100%;
+    max-width: 100%;
     justify-content: center;
-    gap: 8px;
+    gap: clamp(4px, 1vw, 8px);
     margin-top: clamp(10px, 2vw, 14px);
-    padding-bottom: 4px;
+    padding: 0 clamp(4px, 1vw, 8px);
   }
-  .room-controls::-webkit-scrollbar { height: 4px; }
-  .room-controls::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 2px; }
   .ctrl-btn {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 10px 16px;
-    border-radius: 10px;
+    justify-content: center;
+    flex: 1 1 0;
+    min-width: 0;
+    gap: 4px;
+    padding: clamp(6px, 1.5vw, 10px) clamp(6px, 1.5vw, 12px);
+    border-radius: 8px;
     border: 1px solid var(--card-border);
     background: rgba(255, 255, 255, 0.04);
     color: inherit;
-    font-size: clamp(12px, 2vw, 13px);
+    font-size: clamp(10px, 1.5vw, 13px);
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
   }
+  .ctrl-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ctrl-btn:hover {
     background: rgba(255, 255, 255, 0.08);
   }
@@ -373,8 +382,9 @@ const STYLES = `
     color: #fff;
   }
   .ctrl-icon {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
   }
   .loading {
     padding: 60px 24px;
@@ -699,6 +709,10 @@ class HomeWeatherPanel extends HTMLElement {
     });
 
     this._bindRoomControls(root);
+
+    if (this._showSettings) {
+      this._initEntityAutocompletes(root.querySelector(".settings-view"));
+    }
   }
 
   _renderDashboard() {
@@ -1091,6 +1105,76 @@ class HomeWeatherPanel extends HTMLElement {
     });
   }
 
+  _getEntitiesForAutocomplete(entityType) {
+    const entities = this._entities || {};
+    if (entityType === "sensor") {
+      return (entities.sensors || []).map((e) => ({ entity_id: e.entity_id, friendly_name: e.friendly_name || e.entity_id }));
+    }
+    if (entityType === "sensor_temp") {
+      return (entities.sensors || []).filter((s) => (s.unit || "").includes("°") || (s.unit || "").toLowerCase().includes("c")).map((e) => ({ entity_id: e.entity_id, friendly_name: e.friendly_name || e.entity_id }));
+    }
+    if (entityType === "climate") {
+      return (entities.climate || []).map((e) => ({ entity_id: e.entity_id, friendly_name: e.friendly_name || e.entity_id }));
+    }
+    if (entityType === "person") {
+      return (entities.persons || []).map((e) => ({ entity_id: e.entity_id, friendly_name: e.friendly_name || e.entity_id }));
+    }
+    if (entityType === "zone") {
+      return (entities.zones || []).map((e) => ({ entity_id: e.entity_id, friendly_name: e.friendly_name || e.entity_id }));
+    }
+    return [];
+  }
+
+  _filterEntityMatches(entities, query) {
+    const q = (query || "").toLowerCase().trim();
+    if (!q) return entities.slice(0, 20);
+    const scored = entities.map((e) => {
+      let score = 0;
+      const id = (e.entity_id || "").toLowerCase();
+      const name = (e.friendly_name || e.entity_id || "").toLowerCase();
+      if (id.includes(q)) score += 2;
+      if (name.includes(q)) score += 3;
+      if (id.startsWith(q) || name.startsWith(q)) score += 5;
+      if (id === q || name === q) score += 20;
+      return { ...e, _score: score };
+    }).filter((e) => e._score > 0).sort((a, b) => b._score - a._score);
+    return scored.slice(0, 15).map(({ _score, ...e }) => e);
+  }
+
+  _renderEntityAutocomplete(value, entityType, fieldName, placeholder) {
+    this._entityDatalistId = (this._entityDatalistId || 0) + 1;
+    const dlId = `entity-dl-${this._entityDatalistId}`;
+    const val = (value || "").trim();
+    const safeVal = val.replace(/"/g, "&quot;");
+    return `
+      <input type="text" class="form-input entity-datalist-input" value="${safeVal}" placeholder="${(placeholder || "Type to search...").replace(/"/g, "&quot;")}" list="${dlId}" data-entity-type="${entityType}" data-field="${fieldName || ""}" autocomplete="off">
+      <datalist id="${dlId}" data-entity-type="${entityType}"></datalist>
+    `;
+  }
+
+  _initEntityAutocompletes(container) {
+    if (!container) return;
+    container.querySelectorAll(".entity-datalist-input").forEach((input) => {
+      const dlId = input.getAttribute("list");
+      const datalist = dlId ? container.querySelector(`#${dlId}`) : null;
+      const entityType = input.dataset.entityType;
+      if (!datalist || !entityType) return;
+      if (input._entityDatalistInit) return;
+      input._entityDatalistInit = true;
+      const update = () => {
+        const entities = this._getEntitiesForAutocomplete(entityType);
+        const matches = this._filterEntityMatches(entities, input.value);
+        datalist.innerHTML = matches.map((e) => {
+          const id = (e.entity_id || "").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+          const label = (e.friendly_name || e.entity_id || "").replace(/</g, "&lt;");
+          return `<option value="${id}">${label}</option>`;
+        }).join("");
+      };
+      input.addEventListener("focus", () => update());
+      input.addEventListener("input", () => update());
+    });
+  }
+
   _ttsEventLabels() {
     return {
       manual_on: "Manual turn on",
@@ -1121,8 +1205,9 @@ class HomeWeatherPanel extends HTMLElement {
       .settings-card h4 { margin: 12px 0 8px; font-size: 12px; opacity: 0.9; }
       .form-group { margin-bottom: 14px; }
       .form-label { display: block; font-size: 12px; margin-bottom: 4px; opacity: 0.9; }
-      .form-input, .form-select { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--card-border); background: rgba(0,0,0,0.2); color: inherit; font-size: 13px; }
-      .form-select { cursor: pointer; }
+      .form-input, .form-select { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--card-border); background: #1a2840; color: #e8eef3; font-size: 13px; }
+      .form-select { cursor: pointer; color-scheme: dark; }
+      .form-select option { background: #1a2840; color: #e8eef3; }
       .btn-save { margin-top: 16px; padding: 10px 20px; background: var(--accent); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; }
       .btn-save:hover { background: var(--accent-hover); }
       .btn-add { padding: 8px 14px; background: rgba(124,58,237,0.2); color: var(--accent); border: 1px solid var(--accent); border-radius: 8px; cursor: pointer; font-size: 12px; margin-bottom: 12px; }
@@ -1205,8 +1290,6 @@ class HomeWeatherPanel extends HTMLElement {
 
   _renderRoomRow(room, index, entities) {
     const roomId = room.id || crypto.randomUUID();
-    const tempSensorOpts = (entities.sensors || []).map(s => `<option value="${s.entity_id}" ${room.temp_sensor === s.entity_id ? "selected" : ""}>${this._escapeHtml(s.friendly_name || s.entity_id)}</option>`).join("");
-    const humiditySensorOpts = (entities.sensors || []).map(s => `<option value="${s.entity_id}" ${room.humidity_sensor === s.entity_id ? "selected" : ""}>${this._escapeHtml(s.friendly_name || s.entity_id)}</option>`).join("");
     const mediaOpts = (entities.media_players || []).map(m => `<option value="${m.entity_id}" ${room.media_player === m.entity_id ? "selected" : ""}>${this._escapeHtml(m.friendly_name || m.entity_id)}</option>`).join("");
     const deviceTypes = [
       { value: "heater", label: "Heater" },
@@ -1234,15 +1317,11 @@ class HomeWeatherPanel extends HTMLElement {
         </div>
         <div class="form-group">
           <label class="form-label">Temp sensor</label>
-          <select class="form-select" data-field="temp_sensor">
-            <option value="">— None —</option>${tempSensorOpts}
-          </select>
+          ${this._renderEntityAutocomplete(room.temp_sensor || "", "sensor", "temp_sensor", "e.g. sensor.temperature")}
         </div>
         <div class="form-group">
           <label class="form-label">Humidity sensor</label>
-          <select class="form-select" data-field="humidity_sensor">
-            <option value="">— None —</option>${humiditySensorOpts}
-          </select>
+          ${this._renderEntityAutocomplete(room.humidity_sensor || "", "sensor", "humidity_sensor", "e.g. sensor.humidity")}
         </div>
         <div class="form-group">
           <label class="form-label">Media player (for TTS)</label>
@@ -1271,10 +1350,6 @@ class HomeWeatherPanel extends HTMLElement {
       { value: "minisplit", label: "Minisplit" },
       { value: "dehumidifier", label: "Dehumidifier" },
     ];
-    const climateOpts = (entities.climate || []).map(c => `<option value="${c.entity_id}" ${app.climate_entity === c.entity_id ? "selected" : ""}>${this._escapeHtml(c.friendly_name || c.entity_id)}</option>`).join("");
-    const personOpts = (entities.persons || []).map(p => `<option value="${p.entity_id}" ${(app.automation?.person || "") === p.entity_id ? "selected" : ""}>${this._escapeHtml(p.friendly_name || p.entity_id)}</option>`).join("");
-    const zoneOpts = (entities.zones || []).map(z => `<option value="${z.entity_id}" ${(app.automation?.zone || "") === z.entity_id ? "selected" : ""}>${this._escapeHtml(z.friendly_name || z.entity_id)}</option>`).join("");
-    const sensorOpts = (entities.sensors || []).filter(s => (s.unit || "").includes("°") || (s.unit || "").toLowerCase().includes("c")).map(s => `<option value="${s.entity_id}" ${(app.automation?.outdoor_temp_sensor || "") === s.entity_id ? "selected" : ""}>${this._escapeHtml(s.friendly_name || s.entity_id)}</option>`).join("");
     const auto = app.automation || {};
     const appKey = `app-${roomIndex}-${appIndex}`;
     const isAppCollapsed = this._collapsedAppliances.has(appKey);
@@ -1302,22 +1377,16 @@ class HomeWeatherPanel extends HTMLElement {
         </div>
         <div class="form-group">
           <label class="form-label">Climate entity</label>
-          <select class="form-select" data-field="climate_entity">
-            <option value="">— None —</option>${climateOpts}
-          </select>
+          ${this._renderEntityAutocomplete(app.climate_entity || "", "climate", "climate_entity", "e.g. climate.minisplit")}
         </div>
         <h4 style="margin-top:12px;">Automation (enter/leave zone)</h4>
         <div class="form-group">
           <label class="form-label">Person</label>
-          <select class="form-select" data-field="person">
-            <option value="">— None —</option>${personOpts}
-          </select>
+          ${this._renderEntityAutocomplete(auto.person || "", "person", "person", "e.g. person.brandon")}
         </div>
         <div class="form-group">
           <label class="form-label">Zone</label>
-          <select class="form-select" data-field="zone">
-            <option value="">— None —</option>${zoneOpts}
-          </select>
+          ${this._renderEntityAutocomplete(auto.zone || "", "zone", "zone", "e.g. zone.home")}
         </div>
         <div class="form-group">
           <label class="form-label">Enter duration (sec)</label>
@@ -1349,9 +1418,7 @@ class HomeWeatherPanel extends HTMLElement {
         </div>
         <div class="form-group">
           <label class="form-label">Outdoor temp sensor</label>
-          <select class="form-select" data-field="outdoor_temp_sensor">
-            <option value="">— None —</option>${sensorOpts}
-          </select>
+          ${this._renderEntityAutocomplete(auto.outdoor_temp_sensor || "", "sensor_temp", "outdoor_temp_sensor", "e.g. sensor.outdoor_temp")}
         </div>
         <div class="form-group">
           <label class="form-label">Winter start (MM-DD)</label>
