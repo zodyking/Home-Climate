@@ -1,15 +1,15 @@
-"""Constants for Home Weather integration."""
+"""Constants for Home Climate integration."""
 from __future__ import annotations
 
 DOMAIN = "home_weather"
-NAME = "Home Weather"
+NAME = "Home Climate"
 
 # Config file
 CONFIG_FILE = "home_weather.json"
 
 # Panel configuration
 PANEL_ICON = "mdi:thermometer"
-PANEL_TITLE = "Home Weather"
+PANEL_TITLE = "Home Climate"
 PANEL_URL = "home-weather"
 
 # Default TTS settings
@@ -18,7 +18,7 @@ DEFAULT_TTS_SPEED = 1.0
 DEFAULT_TTS_VOLUME = 0.7
 
 # TTS message templates (user customizable)
-DEFAULT_TTS_PREFIX = "Message from Home Weather."
+DEFAULT_TTS_PREFIX = "Message from Home Climate."
 DEFAULT_MODE_CHANGE_MSG = "{prefix} {room_name} climate set to {mode}"
 DEFAULT_PRESENCE_ON_MSG = "{prefix} {room_name} climate turned on"
 DEFAULT_PRESENCE_OFF_MSG = "{prefix} {room_name} climate turned off"

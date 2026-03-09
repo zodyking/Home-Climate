@@ -23,3 +23,6 @@ Thumbs.db
 
 # Local config (user data, not for repo)
 home_weather.json
+
+# Agent helper files (local only)
+Agent-Files/

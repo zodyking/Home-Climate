@@ -1,4 +1,4 @@
-# Home Weather
+# Home Climate
 
 Climate monitoring and automation dashboard for Home Assistant with a modern, dark-themed UI.
 

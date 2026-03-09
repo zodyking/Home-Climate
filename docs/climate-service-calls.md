@@ -1,6 +1,6 @@
 # Climate Service Calls
 
-Reference for Home Assistant climate entities used by the Home Weather integration.
+Reference for Home Assistant climate entities used by the Home Climate integration.
 
 ## Turn off climate device
 

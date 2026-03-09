@@ -1,4 +1,4 @@
-"""WebSocket API for Home Weather integration."""
+"""WebSocket API for Home Climate integration."""
 from __future__ import annotations
 
 import logging
@@ -22,7 +22,7 @@ def async_setup(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_get_user_info)
     websocket_api.async_register_command(hass, websocket_send_tts)
     websocket_api.async_register_command(hass, websocket_get_dashboard_data)
-    _LOGGER.info("Home Weather WebSocket API registered")
+    _LOGGER.info("Home Climate WebSocket API registered")
 
 
 def _get_connection_user_id(connection: Any) -> str | None:
@@ -61,7 +61,7 @@ async def websocket_save_config(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Save Home Weather configuration."""
+    """Save Home Climate configuration."""
     config_manager = hass.data.get(DOMAIN, {}).get("config_manager")
     if not config_manager:
         connection.send_error(msg["id"], "not_ready", "Config manager not initialized")

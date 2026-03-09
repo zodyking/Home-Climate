@@ -1,4 +1,4 @@
-"""Configuration manager for Home Weather integration."""
+"""Configuration manager for Home Climate integration."""
 from __future__ import annotations
 
 import json
@@ -60,7 +60,7 @@ def _write_json_file(path: str, data: Any) -> None:
 
 
 class ConfigManager:
-    """Manage Home Weather configuration stored in JSON file."""
+    """Manage Home Climate configuration stored in JSON file."""
 
     def __init__(self, hass: HomeAssistant) -> None:
         """Initialize the config manager."""
@@ -101,7 +101,7 @@ class ConfigManager:
             )
             if loaded_config is not None:
                 self._config = self._merge_with_defaults(loaded_config)
-                _LOGGER.info("Loaded Home Weather configuration")
+                _LOGGER.info("Loaded Home Climate configuration")
             else:
                 _LOGGER.info("No config file found, using defaults")
                 await self.async_save()
@@ -115,7 +115,7 @@ class ConfigManager:
             await self.hass.async_add_executor_job(
                 _write_json_file, self._config_path, self._config
             )
-            _LOGGER.debug("Saved Home Weather configuration")
+            _LOGGER.debug("Saved Home Climate configuration")
         except IOError as err:
             _LOGGER.error("Error saving config: %s", err)
 

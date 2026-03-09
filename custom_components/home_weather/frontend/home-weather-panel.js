@@ -1,5 +1,5 @@
 /**
- * Home Weather Panel - Climate monitoring and automation dashboard
+ * Home Climate Panel - Climate monitoring and automation dashboard
  * Dark blue theme, clamp-responsive, admin-only settings
  */
 
@@ -248,7 +248,7 @@ class HomeWeatherPanel extends HTMLElement {
       this._render();
       this._startRefresh();
     } catch (e) {
-      console.error("Home Weather load config error:", e);
+      console.error("Home Climate load config error:", e);
       this._loading = false;
       this._error = e?.message || "Failed to load";
       this._render();
@@ -262,7 +262,7 @@ class HomeWeatherPanel extends HTMLElement {
       this._dashboardData = res;
       if (!this._loading) this._render();
     } catch (e) {
-      console.error("Home Weather dashboard data error:", e);
+      console.error("Home Climate dashboard data error:", e);
     }
   }
 
@@ -288,7 +288,7 @@ class HomeWeatherPanel extends HTMLElement {
       <div class="panel-container">
         <header class="panel-header">
           <div class="header-left">
-            <h1 class="panel-title">Home Weather</h1>
+            <h1 class="panel-title">Home Climate</h1>
             ${this._isAdmin ? `
               <button class="settings-btn" aria-label="Settings" title="Settings">
                 <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
@@ -535,7 +535,7 @@ class HomeWeatherPanel extends HTMLElement {
             </div>
             <div class="form-group">
               <label class="form-label">Prefix</label>
-              <input type="text" class="form-input" id="tts-prefix" value="${this._escapeHtml(ttsSettings.prefix || "Message from Home Weather.")}">
+              <input type="text" class="form-input" id="tts-prefix" value="${this._escapeHtml(ttsSettings.prefix || "Message from Home Climate.")}">
             </div>
             <div class="form-group">
               <label class="form-label">Volume (0-1)</label>
@@ -678,7 +678,7 @@ class HomeWeatherPanel extends HTMLElement {
     config.tts_settings = {
       ...config.tts_settings,
       media_player: ttsMediaEl?.value || "",
-      prefix: ttsPrefixEl?.value || "Message from Home Weather.",
+      prefix: ttsPrefixEl?.value || "Message from Home Climate.",
       volume: parseFloat(ttsVolumeEl?.value) || 0.7,
     };
 

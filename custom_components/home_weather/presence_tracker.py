@@ -1,4 +1,4 @@
-"""Presence tracker for Home Weather - person/zone enter/exit automation."""
+"""Presence tracker for Home Climate - person/zone enter/exit automation."""
 from __future__ import annotations
 
 import asyncio
@@ -153,7 +153,7 @@ class PresenceTracker:
             if media_player:
                 from .tts_queue import async_send_tts_or_queue
 
-                prefix = tts_settings.get("prefix", "Message from Home Weather.")
+                prefix = tts_settings.get("prefix", "Message from Home Climate.")
                 msg_template = tts_settings.get(
                     "presence_on_msg",
                     "{prefix} {room_name} climate turned on",
@@ -200,7 +200,7 @@ class PresenceTracker:
             if media_player:
                 from .tts_queue import async_send_tts_or_queue
 
-                prefix = tts_settings.get("prefix", "Message from Home Weather.")
+                prefix = tts_settings.get("prefix", "Message from Home Climate.")
                 msg_template = tts_settings.get(
                     "presence_off_msg",
                     "{prefix} {room_name} climate turned off",
@@ -235,4 +235,4 @@ async def async_start_presence_tracker(
     tracker = PresenceTracker(hass, config_manager)
     hass.data.setdefault(DOMAIN, {})["presence_tracker"] = tracker
     tracker._setup_listeners()
-    _LOGGER.info("Home Weather presence tracker started")
+    _LOGGER.info("Home Climate presence tracker started")

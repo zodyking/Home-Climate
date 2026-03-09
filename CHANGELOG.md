@@ -4,7 +4,7 @@
 
 ### Added
 
-- Initial release
+- Initial release (Home Climate)
 - Zero-config integration setup
 - Room-based dashboard with temp/humidity monitoring
 - Climate automation (heat/cool thresholds, seasonal logic)

@@ -1,4 +1,4 @@
-"""The Home Weather integration."""
+"""The Home Climate integration."""
 from __future__ import annotations
 
 import json
@@ -18,7 +18,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Home Weather from a config entry."""
+    """Set up Home Climate from a config entry."""
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN]["entry_id"] = entry.entry_id
     hass.data[DOMAIN]["options"] = dict(entry.options or {})
@@ -115,4 +115,4 @@ async def async_register_panels(hass: HomeAssistant, entry: ConfigEntry) -> None
         embed_iframe=False,
         require_admin=False,
     )
-    _LOGGER.info("Registered Home Weather panel")
+    _LOGGER.info("Registered Home Climate panel")

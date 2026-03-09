@@ -1,4 +1,4 @@
-"""Config flow for Home Weather integration."""
+"""Config flow for Home Climate integration."""
 from __future__ import annotations
 
 from typing import Any
@@ -9,7 +9,7 @@ from .const import DOMAIN, NAME
 
 
 class HomeWeatherConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Home Weather."""
+    """Handle a config flow for Home Climate."""
 
     VERSION = 1
 

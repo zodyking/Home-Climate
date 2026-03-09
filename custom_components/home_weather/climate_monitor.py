@@ -1,4 +1,4 @@
-"""Climate monitor for Home Weather - threshold and seasonal automation."""
+"""Climate monitor for Home Climate - threshold and seasonal automation."""
 from __future__ import annotations
 
 import asyncio
@@ -180,7 +180,7 @@ class ClimateMonitor:
             if media_player:
                 from .tts_queue import async_send_tts_or_queue
 
-                prefix = tts_settings.get("prefix", "Message from Home Weather.")
+                prefix = tts_settings.get("prefix", "Message from Home Climate.")
                 msg_template = tts_settings.get(
                     "mode_change_msg",
                     "{prefix} {room_name} climate set to {mode}",
@@ -208,4 +208,4 @@ async def async_start_climate_monitor(
     monitor = ClimateMonitor(hass, config_manager)
     hass.data.setdefault(DOMAIN, {})["climate_monitor"] = monitor
     monitor._task = asyncio.create_task(monitor._run_loop())
-    _LOGGER.info("Home Weather climate monitor started")
+    _LOGGER.info("Home Climate climate monitor started")

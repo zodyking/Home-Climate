@@ -1,4 +1,4 @@
-"""TTS helper functions for Home Weather."""
+"""TTS helper functions for Home Climate."""
 from __future__ import annotations
 
 import logging

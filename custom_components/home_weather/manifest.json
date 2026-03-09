@@ -1,6 +1,6 @@
 {
   "domain": "home_weather",
-  "name": "Home Weather",
+  "name": "Home Climate",
   "codeowners": ["@zodyking"],
   "config_flow": true,
   "dependencies": ["http", "frontend", "panel_custom"],

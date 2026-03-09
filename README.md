@@ -1,4 +1,4 @@
-# Home Weather
+# Home Climate
 
 Climate monitoring and automation for Home Assistant. A beautiful dashboard to monitor room temperatures and humidity, with configurable automation for heating, cooling, presence-based control, and TTS announcements.
 
@@ -21,19 +21,19 @@ Climate monitoring and automation for Home Assistant. A beautiful dashboard to m
 4. Enter: `https://github.com/zodyking/Home-Climate`
 5. Select category: **Integration** → **Add** → **Close**
 6. Go to **Integrations** → **+ Explore & Download Repositories**
-7. Search for **Home Weather** (or find it under your added repositories)
+7. Search for **Home Climate** (or find it under your added repositories)
 8. Click **Download** → Restart Home Assistant
-9. Go to **Settings** → **Devices & Services** → **Add Integration** → search for **Home Weather**
+9. Go to **Settings** → **Devices & Services** → **Add Integration** → search for **Home Climate**
 
 ### Manual
 
 1. Copy the `custom_components/home_weather` folder into your Home Assistant `custom_components` directory
 2. Restart Home Assistant
-3. Go to **Settings** → **Devices & Services** → **Add Integration** → search for **Home Weather**
+3. Go to **Settings** → **Devices & Services** → **Add Integration** → search for **Home Climate**
 
 ## Configuration
 
-Add the integration and the **Home Weather** panel will appear in your sidebar. Configure rooms, automation thresholds, presence rules, and TTS via the settings gear (admin only).
+Add the integration and the **Home Climate** panel will appear in your sidebar. Configure rooms, automation thresholds, presence rules, and TTS via the settings gear (admin only).
 
 ## Links
 
