@@ -105,6 +105,7 @@ async def websocket_get_entities(
         "persons": [],
         "zones": [],
         "media_players": [],
+        "weather": [],
     }
 
     for state in hass.states.async_all():

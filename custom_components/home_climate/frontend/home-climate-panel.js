@@ -28,34 +28,19 @@ const STYLES = `
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: clamp(14px, 3vw, 22px) clamp(18px, 4vw, 28px);
+    padding: clamp(8px, 2vw, 12px) clamp(12px, 3vw, 20px);
     background: #152238;
     border-bottom: 1px solid var(--card-border);
-    margin: calc(-1 * clamp(12px, 2.5vw, 24px)) calc(-1 * clamp(12px, 2.5vw, 24px)) clamp(16px, 2.5vw, 24px);
+    margin: calc(-1 * clamp(12px, 2.5vw, 24px)) calc(-1 * clamp(12px, 2.5vw, 24px)) clamp(12px, 2vw, 20px);
   }
-  .header-left {
+  .header-spacer {
+    width: 40px;
+    flex-shrink: 0;
+  }
+  .header-right {
     display: flex;
     align-items: center;
-    gap: clamp(10px, 2vw, 18px);
-  }
-  .panel-title {
-    font-size: clamp(20px, 4vw, 26px);
-    font-weight: 600;
-    margin: 0;
-    letter-spacing: 0.02em;
-  }
-  .header-datetime {
-    text-align: right;
-  }
-  .header-time {
-    font-size: clamp(22px, 4vw, 30px);
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    display: block;
-  }
-  .header-date {
-    font-size: clamp(12px, 2vw, 14px);
-    opacity: 0.85;
+    gap: clamp(6px, 1.5vw, 12px);
   }
   .settings-btn {
     width: 42px;
@@ -90,7 +75,6 @@ const STYLES = `
     cursor: pointer;
     align-items: center;
     justify-content: center;
-    margin-right: 8px;
     flex-shrink: 0;
   }
   .menu-btn svg {
@@ -108,13 +92,44 @@ const STYLES = `
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: clamp(16px, 3vw, 24px) 0;
+    flex: 1;
   }
   .logo-section img {
-    max-width: min(180px, 50vw);
+    max-width: min(140px, 35vw);
     height: auto;
     display: block;
   }
+  .dashboard-summary-row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: clamp(16px, 3vw, 24px);
+    margin-bottom: clamp(16px, 3vw, 24px);
+  }
+  .summary-card {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 50%;
+    background: var(--card-bg);
+    border-radius: clamp(12px, 2.5vw, 16px);
+    border: 1px solid var(--card-border);
+    padding: clamp(14px, 2.5vw, 20px);
+    box-sizing: border-box;
+  }
+  .summary-card h4 { margin: 0 0 10px; font-size: 14px; font-weight: 600; opacity: 0.9; }
+  .summary-card .room-stats { margin: 0; }
+  .rooms-row { width: 100%; }
+  .rooms-scroll {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: clamp(16px, 3vw, 24px);
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding-bottom: 8px;
+  }
+  .rooms-scroll::-webkit-scrollbar { display: none; }
   .rooms-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
@@ -498,7 +513,7 @@ class HomeWeatherPanel extends HTMLElement {
     this._dashboardData = null;
     this._isAdmin = false;
     this._showSettings = false;
-    this._settingsTab = "rooms";
+    this._settingsTab = "global";
     this._entities = null;
     this._loading = true;
     this._error = null;
@@ -521,24 +536,10 @@ class HomeWeatherPanel extends HTMLElement {
   connectedCallback() {
     this._render();
     this._loadConfig();
-    this._startClock();
   }
 
   disconnectedCallback() {
     this._stopRefresh();
-  }
-
-  _startClock() {
-    this._updateClock();
-    setInterval(() => this._updateClock(), 1000);
-  }
-
-  _updateClock() {
-    const now = new Date();
-    const timeEl = this.shadowRoot?.querySelector(".header-time");
-    const dateEl = this.shadowRoot?.querySelector(".header-date");
-    if (timeEl) timeEl.textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    if (dateEl) dateEl.textContent = now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
   }
 
   _startRefresh() {
@@ -728,24 +729,20 @@ class HomeWeatherPanel extends HTMLElement {
     root.innerHTML = `
       <style>${STYLES}</style>
       <div class="panel-container">
-        <div class="logo-section">
-          <img src="/home_climate_panel/icons/Logo.png" alt="Home Climate" />
-        </div>
         <header class="panel-header">
-          <div class="header-left">
+          <div class="header-spacer"></div>
+          <div class="logo-section">
+            <img src="/home_climate_panel/icons/Logo.png" alt="Home Climate" />
+          </div>
+          <div class="header-right">
             <button class="menu-btn" id="menu-btn" aria-label="Menu" title="Menu">
               <svg viewBox="0 0 24 24"><path d="M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z"/></svg>
             </button>
-            <h1 class="panel-title">Home Climate</h1>
             ${this._isAdmin ? `
               <button class="settings-btn" aria-label="Settings" title="Settings">
                 <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
               </button>
             ` : ""}
-          </div>
-          <div class="header-datetime">
-            <span class="header-time">--:--</span>
-            <span class="header-date"></span>
           </div>
         </header>
 
@@ -1570,21 +1567,27 @@ class HomeWeatherPanel extends HTMLElement {
       <style>${settingsStyles}</style>
       <div class="settings-view">
         <div class="settings-tabs">
+          <button class="settings-tab ${this._settingsTab === "global" ? "active" : ""}" data-tab="global">Global Settings</button>
           <button class="settings-tab ${this._settingsTab === "rooms" ? "active" : ""}" data-tab="rooms">Rooms</button>
           <button class="settings-tab ${this._settingsTab === "tts" ? "active" : ""}" data-tab="tts">TTS</button>
+        </div>
+
+        <div class="settings-tab-content ${this._settingsTab === "global" ? "active" : ""}" id="tab-global">
+          <div class="settings-card">
+            <h3>Global Settings</h3>
+            <div class="settings-section">
+              <h4 class="settings-section-title">Outdoor (weather)</h4>
+              <div class="form-group">
+                <label class="form-label">Weather entity (for outdoor temp/humidity)</label>
+                ${this._renderEntityDropdown(this._config?.weather_entity || "", "weather", "weather_entity", "Select weather entity")}
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="settings-tab-content ${this._settingsTab === "rooms" ? "active" : ""}" id="tab-rooms">
           <div class="settings-card">
             <h3>Rooms</h3>
-            <div class="settings-section">
-              <h4 class="settings-section-title">Outdoor (weather)</h4>
-              <div class="form-group">
-                <label class="form-label">Weather entity (for outdoor temp/humidity)</label>
-                ${this._renderEntityAutocomplete(this._config?.weather_entity || "", "weather", "weather_entity", "e.g. weather.home")}
-              </div>
-            </div>
-            <div class="settings-section-divider"></div>
             <button class="btn-add" data-action="add-room">+ Add Room</button>
             <div id="rooms-list">
               ${rooms.length === 0 ? "<p style='opacity:0.7;'>No rooms. Add a room to configure sensors and HVAC appliances.</p>" : ""}
