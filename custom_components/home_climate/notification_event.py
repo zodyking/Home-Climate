@@ -116,10 +116,13 @@ async def async_send_notification_for_event(
         return
 
     title = prefix
-    entity_id = notify_entity if notify_entity.startswith("notify.") else f"notify.{notify_entity}"
-    service_name = entity_id.split(".", 1)[1] if "." in entity_id else notify_entity
-    # Remove apostrophes etc. - HA mobile_app uses slug like brandons_iphone not brandon's_iphone
-    service_name = service_name.replace("'", "").replace('"', "").replace("`", "")
+    # Sanitize: HA mobile_app uses brandons_iphone not brandon's_iphone (strip apostrophe-like chars)
+    _apostrophes = "'\u2018\u2019\u201a\u201b\u2032`\""
+    safe = str(notify_entity).strip()
+    for c in _apostrophes:
+        safe = safe.replace(c, "")
+    entity_id = safe if safe.startswith("notify.") else f"notify.{safe}"
+    service_name = entity_id.split(".", 1)[1] if "." in entity_id else safe
 
     _LOGGER.debug(
         "Sending notification for %s to %s: %s", event, entity_id, message[:80]
