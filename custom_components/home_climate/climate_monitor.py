@@ -21,6 +21,7 @@ from .const import (
     TTS_AUTO_MODE_CHANGE,
     TTS_COMFORT_ADJUSTED,
     TTS_COMFORT_REVERT,
+    TTS_SEASONAL_BLOCKED,
 )
 
 if TYPE_CHECKING:
@@ -297,6 +298,64 @@ class ClimateMonitor:
                 _LOGGER.debug("Skipping %s: power sensor reports off", climate_entity)
                 return
 
+        # Exit dry when temp below dry_temp_min or at comfort (dry overcools)
+        current_lower = (current_mode or "").strip().lower()
+        if current_lower == "dry" and supports_dry:
+            should_exit_dry = (
+                indoor_temp < dry_temp_min
+                or self._at_comfort(indoor_temp, comfort_temp, comfort_tolerance)
+            )
+            if should_exit_dry:
+                if (
+                    indoor_temp < comfort_temp - comfort_tolerance
+                    and self._should_start_heat(indoor_temp, heat_threshold, heat_allowed, heat_enabled)
+                ):
+                    min_t, max_t = self._appliance_min_max_temp(climate_entity)
+                    set_temp = self._dynamic_set_temp_heat(indoor_temp, comfort_temp, min_t, max_t)
+                    await self._start_phase(climate_entity, "heating", set_temp, power_switch, config_manager)
+                    astate["phase"] = "heating"
+                    astate["phase_started_at"] = now
+                    astate["last_room_temp"] = indoor_temp
+                    astate["last_set_temp"] = set_temp
+                    astate["progress_checks"] = [(now, indoor_temp)]
+                    astate["struggle_reduced_at"] = None
+                    astate["current_set_temp"] = set_temp
+                    self._last_settemp_check[key] = now
+                else:
+                    target = "fan_only" if supports_fan_only else "off"
+                    await self._transition_to_fan_or_off(
+                        climate_entity, target, power_switch, config_manager
+                    )
+                    astate["phase"] = "idle"
+                    astate["phase_started_at"] = 0
+                    astate["progress_checks"] = []
+                self._cooldown_until[key] = now + self._COOLDOWN_SEC
+                return
+
+        # Enforce seasonal blocks: revert manual heat in summer / cool in winter
+        if current_lower == "heat" and not heat_allowed:
+            target = "fan_only" if supports_fan_only else "off"
+            await self._transition_to_fan_or_off(
+                climate_entity, target, power_switch, config_manager,
+                seasonal_block_reason="Heat not allowed in summer",
+            )
+            astate["phase"] = "idle"
+            astate["phase_started_at"] = 0
+            astate["progress_checks"] = []
+            self._cooldown_until[key] = now + self._COOLDOWN_SEC
+            return
+        if current_lower == "cool" and not cool_allowed:
+            target = "fan_only" if supports_fan_only else "off"
+            await self._transition_to_fan_or_off(
+                climate_entity, target, power_switch, config_manager,
+                seasonal_block_reason="Cool not allowed in winter",
+            )
+            astate["phase"] = "idle"
+            astate["phase_started_at"] = 0
+            astate["progress_checks"] = []
+            self._cooldown_until[key] = now + self._COOLDOWN_SEC
+            return
+
         target_phase = phase
         if self._at_comfort(indoor_temp, comfort_temp, comfort_tolerance):
             current_lower = (current_mode or "").strip().lower()
@@ -544,6 +603,7 @@ class ClimateMonitor:
         power_switch: str | None,
         config_manager: "ConfigManager",
         comfort_revert_temp: float | None = None,
+        seasonal_block_reason: str | None = None,
     ) -> None:
         """Switch to fan_only or turn off."""
         if target == "fan_only":
@@ -572,6 +632,15 @@ class ClimateMonitor:
                 await async_send_notification_for_event(
                     self.hass, config_manager, climate_entity,
                     TTS_COMFORT_REVERT, temp=comfort_revert_temp,
+                )
+            elif seasonal_block_reason is not None:
+                await async_send_tts_for_event(
+                    self.hass, config_manager, climate_entity,
+                    TTS_SEASONAL_BLOCKED, reason=seasonal_block_reason,
+                )
+                await async_send_notification_for_event(
+                    self.hass, config_manager, climate_entity,
+                    TTS_SEASONAL_BLOCKED, reason=seasonal_block_reason,
                 )
             else:
                 mode_label = "fan only" if target == "fan_only" else "off"

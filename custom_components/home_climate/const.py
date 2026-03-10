@@ -48,6 +48,7 @@ TTS_FAN_CHANGE = "fan_change"
 TTS_AUTO_MODE_CHANGE = "auto_mode_change"
 TTS_COMFORT_ADJUSTED = "comfort_adjusted"
 TTS_COMFORT_REVERT = "comfort_revert"
+TTS_SEASONAL_BLOCKED = "seasonal_blocked"
 
 TTS_EVENT_KEYS = [
     TTS_MANUAL_ON,
@@ -60,6 +61,7 @@ TTS_EVENT_KEYS = [
     TTS_AUTO_MODE_CHANGE,
     TTS_COMFORT_ADJUSTED,
     TTS_COMFORT_REVERT,
+    TTS_SEASONAL_BLOCKED,
 ]
 
 # Default templates per event (TTS uses prefix in message)
@@ -74,6 +76,7 @@ DEFAULT_TTS_MESSAGES = {
     TTS_AUTO_MODE_CHANGE: "{prefix} {room_name} {device_name} set to {mode} by automation",
     TTS_COMFORT_ADJUSTED: "{prefix} {room_name} {device_name} could not reach comfort temp; target adjusted to {temp}",
     TTS_COMFORT_REVERT: "{prefix} {room_name} {device_name}: Room already at comfort temp of {temp}, reverted to fan only mode",
+    TTS_SEASONAL_BLOCKED: "{prefix} {room_name} {device_name}: {reason}, switched to fan only mode",
 }
 
 # Device types for appliances
@@ -176,6 +179,7 @@ DEFAULT_NOTIFICATION_MESSAGES = {
     TTS_AUTO_MODE_CHANGE: "{room_name} {device_name} set to {mode} by automation",
     TTS_COMFORT_ADJUSTED: "{room_name} {device_name} could not reach comfort temp; target adjusted to {temp}",
     TTS_COMFORT_REVERT: "{room_name} {device_name}: Room already at comfort temp of {temp}, reverted to fan only mode",
+    TTS_SEASONAL_BLOCKED: "{room_name} {device_name}: {reason}, switched to fan only mode",
 }
 
 

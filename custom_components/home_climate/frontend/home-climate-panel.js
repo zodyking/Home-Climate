@@ -1574,6 +1574,7 @@ class HomeWeatherPanel extends HTMLElement {
       auto_mode_change: "Automation mode change",
       comfort_adjusted: "Comfort temp adjusted (struggle)",
       comfort_revert: "Room at comfort – reverted to fan only",
+      seasonal_blocked: "Seasonal block (heat in summer / cool in winter)",
     };
   }
 
@@ -1632,7 +1633,7 @@ class HomeWeatherPanel extends HTMLElement {
       .tts-toggle { min-width: 50px; }
     `;
 
-    const ttsEventKeys = ["manual_on", "manual_off", "mode_change", "temp_change", "presence_enter", "presence_leave", "fan_change", "auto_mode_change", "comfort_adjusted", "comfort_revert"];
+    const ttsEventKeys = ["manual_on", "manual_off", "mode_change", "temp_change", "presence_enter", "presence_leave", "fan_change", "auto_mode_change", "comfort_adjusted", "comfort_revert", "seasonal_blocked"];
     const labels = this._ttsEventLabels();
 
     return `
@@ -2093,7 +2094,7 @@ class HomeWeatherPanel extends HTMLElement {
       messages: {},
     };
 
-    const ttsEventKeys = ["manual_on", "manual_off", "mode_change", "temp_change", "presence_enter", "presence_leave", "fan_change", "auto_mode_change", "comfort_adjusted", "comfort_revert"];
+    const ttsEventKeys = ["manual_on", "manual_off", "mode_change", "temp_change", "presence_enter", "presence_leave", "fan_change", "auto_mode_change", "comfort_adjusted", "comfort_revert", "seasonal_blocked"];
     ttsEventKeys.forEach((key) => {
       const row = root.querySelector(`[data-tts-key="${key}"]`);
       const templateEl = row?.querySelector("[data-field='template']");
