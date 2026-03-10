@@ -85,6 +85,47 @@ async def websocket_save_config(
         connection.send_error(msg["id"], "save_failed", str(e))
 
 
+def _device_name_to_notify_slug(name: str) -> str:
+    """Convert device name to notify.mobile_app_ slug: lowercase, spaces to underscore, remove apostrophes."""
+    if not name:
+        return ""
+    s = str(name).lower().strip()
+    for c in "'\"`":
+        s = s.replace(c, "")
+    s = "_".join(s.split())
+    return s
+
+
+def _get_mobile_app_devices(hass: HomeAssistant) -> list[dict[str, Any]]:
+    """Get Mobile App devices with their notify entity_id for notification targeting."""
+    from homeassistant.helpers import device_registry as dr
+    from homeassistant.helpers import entity_registry as er
+
+    result: list[dict[str, Any]] = []
+    dev_reg = dr.async_get(hass)
+    ent_reg = er.async_get(hass)
+
+    mobile_entry_ids = {e.entry_id for e in hass.config_entries.async_entries("mobile_app")}
+    for device in dev_reg.devices.values():
+        if not mobile_entry_ids or not device.config_entries:
+            continue
+        if not (device.config_entries & mobile_entry_ids):
+            continue
+        device_name = device.name or device.name_by_user or f"Mobile App {device.id[:8]}"
+        entity_id = None
+        for ent in ent_reg.entities.values():
+            if ent.device_id == device.id and ent.entity_id.startswith("notify.mobile_app_"):
+                entity_id = ent.entity_id
+                break
+        if not entity_id:
+            slug = _device_name_to_notify_slug(device_name)
+            if slug:
+                entity_id = f"notify.mobile_app_{slug}"
+        if entity_id:
+            result.append({"device_name": device_name, "entity_id": entity_id})
+    return sorted(result, key=lambda x: (x.get("device_name") or "").lower())
+
+
 def _entity_list_from_registry(
     hass: HomeAssistant,
     domain: str,
@@ -139,6 +180,7 @@ async def websocket_get_entities(
         "weather": [],
         "notify": [],
         "switch": [],
+        "mobile_app_devices": [],
     }
 
     domains = [
@@ -160,6 +202,9 @@ async def websocket_get_entities(
             if domain == "sensor" and "unit_of_measurement" not in it:
                 it["unit_of_measurement"] = ""
         result[key] = items
+
+    if entity_type is None or entity_type in ("mobile_app_devices", "notify"):
+        result["mobile_app_devices"] = _get_mobile_app_devices(hass)
 
     connection.send_result(msg["id"], result)
 
@@ -245,7 +290,7 @@ def _get_climate_state(
             pass
 
     climate_state = state.state
-    climate_mode = attrs.get("hvac_mode")
+    climate_mode = attrs.get("hvac_mode") or state.state
     if config_manager and appliance:
         from .power_detector import get_appliance_power_state
         power_state = get_appliance_power_state(hass, config_manager, entity_id)
@@ -253,9 +298,6 @@ def _get_climate_state(
             if power_state == "off":
                 climate_state = "off"
                 climate_mode = "off"
-            else:
-                climate_state = climate_mode or "heat"
-                climate_mode = climate_mode or "heat"
 
     return {
         "climate_state": climate_state,

@@ -95,6 +95,11 @@ def _default_tts_messages() -> dict:
     }
 
 
+# Default dehumidifier (dry) automation
+DEFAULT_DRY_HUMIDITY_THRESHOLD_PCT = 60
+DEFAULT_DRY_TEMP_MIN_C = 18
+
+
 def default_appliance_automation() -> dict:
     """Default automation for an appliance."""
     return {
@@ -109,6 +114,11 @@ def default_appliance_automation() -> dict:
         "target_temp_on_enter": 22.0,
         "heat_threshold_c": DEFAULT_HEAT_THRESHOLD_C,
         "cool_threshold_c": DEFAULT_COOL_THRESHOLD_C,
+        "heat_automation_enabled": True,
+        "cool_automation_enabled": True,
+        "dry_automation_enabled": False,
+        "dry_humidity_threshold_pct": DEFAULT_DRY_HUMIDITY_THRESHOLD_PCT,
+        "dry_temp_min_c": DEFAULT_DRY_TEMP_MIN_C,
         "seasonal_mode": SEASONAL_MODE_OUTDOOR_TEMP,
         "outdoor_temp_sensor": "",
         "date_winter_start": DEFAULT_DATE_WINTER_START,

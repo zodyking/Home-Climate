@@ -11,9 +11,9 @@ from homeassistant.const import ATTR_ENTITY_ID
 
 from .const import (
     CLIMATE_CHECK_INTERVAL,
+    DEFAULT_DRY_HUMIDITY_THRESHOLD_PCT,
+    DEFAULT_DRY_TEMP_MIN_C,
     DOMAIN,
-    SEASONAL_MODE_DATE,
-    SEASONAL_MODE_OUTDOOR_TEMP,
     TTS_MODE_CHANGE,
 )
 
@@ -36,42 +36,16 @@ def _parse_temp(value: Any, unit: str | None) -> float | None:
     return temp
 
 
-def _get_outdoor_temp_c(
-    hass: "HomeAssistant",
-    config: dict[str, Any],
-    appliance_auto: dict[str, Any],
-) -> float | None:
-    """Get outdoor temperature in Celsius from weather entity (preferred) or sensor."""
-    # Prefer global weather entity
-    weather_entity = (config.get("weather_entity") or "").strip()
-    if weather_entity:
-        wstate = hass.states.get(weather_entity)
-        if wstate and wstate.state not in ("unknown", "unavailable"):
-            attrs = wstate.attributes or {}
-            t = attrs.get("temperature")
-            if t is not None:
-                temp_unit = hass.config.units.temperature_unit
-                return _parse_temp(t, temp_unit)
-    # Fall back to per-appliance outdoor_temp_sensor
-    outdoor_sensor = (appliance_auto.get("outdoor_temp_sensor") or "").strip()
-    if outdoor_sensor:
-        ostate = hass.states.get(outdoor_sensor)
-        if ostate and ostate.state not in ("unknown", "unavailable"):
-            ounit = ostate.attributes.get("unit_of_measurement")
-            return _parse_temp(ostate.state, ounit)
-    return None
+def _is_winter_month() -> bool:
+    """Return True if current month is winter (Nov, Dec, Jan, Feb, Mar). No AC in winter."""
+    month = datetime.now().month
+    return month in (11, 12, 1, 2, 3)
 
 
-def _is_winter_date(winter_start: str, winter_end: str) -> bool:
-    """Return True if today is in winter range (e.g. 11-01 to 03-31)."""
-    try:
-        today = datetime.now()
-        mmdd = today.strftime("%m-%d")
-        if winter_start <= winter_end:
-            return winter_start <= mmdd <= winter_end
-        return mmdd >= winter_start or mmdd <= winter_end
-    except Exception:
-        return False
+def _is_summer_month() -> bool:
+    """Return True if current month is summer (Jun, Jul, Aug). No heat in summer."""
+    month = datetime.now().month
+    return month in (6, 7, 8)
 
 
 class ClimateMonitor:
@@ -129,6 +103,17 @@ class ClimateMonitor:
             if indoor_temp is None:
                 continue
 
+            # Get room humidity for dry automation
+            indoor_humidity: float | None = None
+            humidity_sensor = (room.get("humidity_sensor") or "").strip()
+            if humidity_sensor:
+                hstate = self.hass.states.get(humidity_sensor)
+                if hstate and hstate.state not in ("unknown", "unavailable"):
+                    try:
+                        indoor_humidity = float(hstate.state)
+                    except (ValueError, TypeError):
+                        pass
+
             for appliance in room.get("appliances", []):
                 climate_entity = (appliance.get("climate_entity") or "").strip()
                 if not climate_entity:
@@ -137,30 +122,15 @@ class ClimateMonitor:
                 auto = appliance.get("automation") or {}
                 heat_threshold = float(auto.get("heat_threshold_c", 18))
                 cool_threshold = float(auto.get("cool_threshold_c", 26))
-                seasonal_mode = auto.get("seasonal_mode", SEASONAL_MODE_OUTDOOR_TEMP)
-                cool_only_above = float(auto.get("outdoor_cool_only_above_c", 25))
-                heat_only_below = float(auto.get("outdoor_heat_only_below_c", 15))
-                winter_start = (auto.get("date_winter_start") or "11-01").strip()
-                winter_end = (auto.get("date_winter_end") or "03-31").strip()
+                heat_enabled = auto.get("heat_automation_enabled", True)
+                cool_enabled = auto.get("cool_automation_enabled", True)
+                dry_enabled = auto.get("dry_automation_enabled", False)
+                dry_humidity_pct = float(auto.get("dry_humidity_threshold_pct", DEFAULT_DRY_HUMIDITY_THRESHOLD_PCT))
+                dry_temp_min = float(auto.get("dry_temp_min_c", DEFAULT_DRY_TEMP_MIN_C))
 
-                outdoor_temp = _get_outdoor_temp_c(
-                    self.hass,
-                    config_manager.config,
-                    auto,
-                )
-
-                heat_allowed = True
-                cool_allowed = True
-                if seasonal_mode == SEASONAL_MODE_OUTDOOR_TEMP and outdoor_temp is not None:
-                    if outdoor_temp < heat_only_below:
-                        cool_allowed = False
-                    elif outdoor_temp > cool_only_above:
-                        heat_allowed = False
-                elif seasonal_mode == SEASONAL_MODE_DATE:
-                    if _is_winter_date(winter_start, winter_end):
-                        cool_allowed = False
-                    else:
-                        heat_allowed = False
+                # Fixed seasonal: no AC in winter, no heat in summer
+                heat_allowed = not _is_summer_month()
+                cool_allowed = not _is_winter_month()
 
                 climate_state = self.hass.states.get(climate_entity)
                 current_mode = (
@@ -168,15 +138,25 @@ class ClimateMonitor:
                     if climate_state
                     else "off"
                 )
+                hvac_modes = list(climate_state.attributes.get("hvac_modes") or []) if climate_state else []
+                supports_dry = any((m or "").lower() == "dry" for m in hvac_modes)
 
                 if climate_entity in self._cooldown_until and now < self._cooldown_until[climate_entity]:
                     continue
 
                 target_mode: str | None = None
-                if indoor_temp < heat_threshold and heat_allowed:
+                if indoor_temp < heat_threshold and heat_allowed and heat_enabled:
                     target_mode = "heat"
-                elif indoor_temp > cool_threshold and cool_allowed:
+                elif indoor_temp > cool_threshold and cool_allowed and cool_enabled:
                     target_mode = "cool"
+                elif (
+                    dry_enabled
+                    and supports_dry
+                    and indoor_temp >= dry_temp_min
+                    and (indoor_humidity or 0) > dry_humidity_pct
+                    and heat_threshold <= indoor_temp <= cool_threshold
+                ):
+                    target_mode = "dry"
                 else:
                     target_mode = "off"
 

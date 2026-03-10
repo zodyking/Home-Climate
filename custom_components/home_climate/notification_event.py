@@ -31,6 +31,16 @@ def _format_for_speech(s: str) -> str:
     return str(s).replace("_", " ").strip()
 
 
+def _mode_for_display(mode: str) -> str:
+    """Map HVAC mode to user-friendly label for TTS/notifications (e.g. dry -> dehumidifier)."""
+    if not mode:
+        return ""
+    m = str(mode).strip().lower()
+    if m == "dry":
+        return "dehumidifier"
+    return _format_for_speech(mode)
+
+
 async def async_send_notification_for_event(
     hass: HomeAssistant,
     config_manager: "ConfigManager",
@@ -91,7 +101,7 @@ async def async_send_notification_for_event(
         "temp": format_vars.get("temp", ""),
     }
     vars_dict.update(format_vars)
-    vars_dict["mode"] = _format_for_speech(str(vars_dict.get("mode", "")))
+    vars_dict["mode"] = _mode_for_display(str(vars_dict.get("mode", "")))
     vars_dict["fan_mode"] = _format_for_speech(str(vars_dict.get("fan_mode", "")))
 
     try:

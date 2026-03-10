@@ -569,11 +569,11 @@ class HomeWeatherPanel extends HTMLElement {
       const [configRes, userRes, entitiesRes] = await Promise.all([
         this._hass.callWS({ type: "home_climate/get_config" }),
         this._hass.callWS({ type: "home_climate/get_user_info" }).catch(() => ({ is_admin: false })),
-        this._hass.callWS({ type: "home_climate/get_entities" }).catch(() => ({ climate: [], sensors: [], persons: [], zones: [], media_players: [], weather: [], notify: [], switch: [] })),
+        this._hass.callWS({ type: "home_climate/get_entities" }).catch(() => ({ climate: [], sensors: [], persons: [], zones: [], media_players: [], weather: [], notify: [], switch: [], mobile_app_devices: [] })),
       ]);
       this._config = configRes || {};
       this._isAdmin = userRes?.is_admin === true;
-      this._entities = entitiesRes || { climate: [], sensors: [], persons: [], zones: [], media_players: [], weather: [], notify: [], switch: [] };
+      this._entities = entitiesRes || { climate: [], sensors: [], persons: [], zones: [], media_players: [], weather: [], notify: [], switch: [], mobile_app_devices: [] };
       await this._loadDashboardData();
       this._loading = false;
       this._render();
@@ -876,8 +876,13 @@ class HomeWeatherPanel extends HTMLElement {
             enter_duration_sec: 30,
             exit_duration_sec: 300,
             target_temp_on_enter: this._fToC(72),
+            heat_automation_enabled: true,
             heat_threshold_c: this._fToC(64),
+            cool_automation_enabled: true,
             cool_threshold_c: this._fToC(79),
+            dry_automation_enabled: false,
+            dry_humidity_threshold_pct: 60,
+            dry_temp_min_c: this._fToC(64),
             seasonal_mode: "outdoor_temp",
             outdoor_temp_sensor: "",
             date_winter_start: "11-01",
@@ -1455,6 +1460,11 @@ class HomeWeatherPanel extends HTMLElement {
       return (entities.weather || []).map((e) => ({ entity_id: e.entity_id, friendly_name: e.friendly_name || e.entity_id }));
     }
     if (entityType === "notify") {
+      const mobile = (entities.mobile_app_devices || []).map((e) => ({
+        entity_id: e.entity_id,
+        friendly_name: e.device_name || e.entity_id,
+      }));
+      if (mobile.length > 0) return mobile;
       return (entities.notify || []).map((e) => ({ entity_id: e.entity_id, friendly_name: e.friendly_name || e.entity_id }));
     }
     if (entityType === "media_player") {
@@ -1558,7 +1568,7 @@ class HomeWeatherPanel extends HTMLElement {
     }
     const ttsSettings = this._config?.tts_settings || {};
     const ttsMessages = ttsSettings.messages || {};
-    const entities = this._entities || { climate: [], sensors: [], persons: [], zones: [], media_players: [], weather: [], notify: [], switch: [] };
+    const entities = this._entities || { climate: [], sensors: [], persons: [], zones: [], media_players: [], weather: [], notify: [], switch: [], mobile_app_devices: [] };
 
     const settingsStyles = `
       .settings-tabs { display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap; }
@@ -1858,14 +1868,32 @@ class HomeWeatherPanel extends HTMLElement {
         </div>
         <div class="settings-section-divider"></div>
         <div class="settings-section">
-          <h4 class="settings-section-title">Thresholds</h4>
+          <h4 class="settings-section-title">Automations</h4>
+        <p class="form-label" style="margin-bottom:10px;opacity:0.85;">No AC in winter (Nov–Mar). No heat in summer (Jun–Aug).</p>
         <div class="form-group">
-          <label class="form-label">Heat below (°F)</label>
+          <label class="form-label" style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" data-field="heat_automation_enabled" ${auto.heat_automation_enabled !== false ? "checked" : ""}>
+            Heat when room temp below (°F)
+          </label>
           <input type="number" class="form-input" data-field="heat_threshold_c" value="${this._cToF(auto.heat_threshold_c ?? this._fToC(64))}" step="0.5">
         </div>
         <div class="form-group">
-          <label class="form-label">Cool above (°F)</label>
+          <label class="form-label" style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" data-field="cool_automation_enabled" ${auto.cool_automation_enabled !== false ? "checked" : ""}>
+            Cool when room temp above (°F)
+          </label>
           <input type="number" class="form-input" data-field="cool_threshold_c" value="${this._cToF(auto.cool_threshold_c ?? this._fToC(79))}" step="0.5">
+        </div>
+        <div class="form-group">
+          <label class="form-label" style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" data-field="dry_automation_enabled" ${auto.dry_automation_enabled ? "checked" : ""}>
+            Dehumidifier when room humidity above (%)
+          </label>
+          <input type="number" class="form-input" data-field="dry_humidity_threshold_pct" value="${auto.dry_humidity_threshold_pct ?? 60}" min="0" max="100" step="1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">No dehumidifier when temp below (°F)</label>
+          <input type="number" class="form-input" data-field="dry_temp_min_c" value="${this._cToF(auto.dry_temp_min_c ?? this._fToC(64))}" step="0.5">
         </div>
         </div>
         <div class="settings-section-divider"></div>
@@ -1930,8 +1958,13 @@ class HomeWeatherPanel extends HTMLElement {
         const enterEl = acard.querySelector("[data-field='enter_duration_sec']");
         const exitEl = acard.querySelector("[data-field='exit_duration_sec']");
         const targetTempEl = acard.querySelector("[data-field='target_temp_on_enter']");
+        const heatEnabledEl = acard.querySelector("[data-field='heat_automation_enabled']");
         const heatEl = acard.querySelector("[data-field='heat_threshold_c']");
+        const coolEnabledEl = acard.querySelector("[data-field='cool_automation_enabled']");
         const coolEl = acard.querySelector("[data-field='cool_threshold_c']");
+        const dryEnabledEl = acard.querySelector("[data-field='dry_automation_enabled']");
+        const dryHumidityEl = acard.querySelector("[data-field='dry_humidity_threshold_pct']");
+        const dryTempMinEl = acard.querySelector("[data-field='dry_temp_min_c']");
         const powerSensorEnabledEl = acard.querySelector("[data-field='power_sensor_enabled']");
         const powerSensorEl = acard.querySelector("[data-field='power_sensor_sensor']");
         const powerSwitchEl = acard.querySelector("[data-field='power_sensor_switch']");
@@ -1966,8 +1999,13 @@ class HomeWeatherPanel extends HTMLElement {
             enter_duration_sec: parseInt(enterEl?.value, 10) || 30,
             exit_duration_sec: parseInt(exitEl?.value, 10) || 300,
             target_temp_on_enter: this._fToC(parseFloat(targetTempEl?.value)) || 22,
+            heat_automation_enabled: heatEnabledEl?.checked !== false,
             heat_threshold_c: this._fToC(parseFloat(heatEl?.value)) || 18,
+            cool_automation_enabled: coolEnabledEl?.checked !== false,
             cool_threshold_c: this._fToC(parseFloat(coolEl?.value)) || 26,
+            dry_automation_enabled: dryEnabledEl?.checked === true,
+            dry_humidity_threshold_pct: Math.max(0, Math.min(100, parseFloat(dryHumidityEl?.value) || 60)),
+            dry_temp_min_c: this._fToC(parseFloat(dryTempMinEl?.value)) ?? 18,
             seasonal_mode: "outdoor_temp",
             outdoor_temp_sensor: "",
             date_winter_start: "11-01",
