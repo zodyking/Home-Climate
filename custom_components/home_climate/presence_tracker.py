@@ -159,6 +159,17 @@ class PresenceTracker:
         if not state or not _person_in_zone(state.state, zone):
             return
 
+        from .power_detector import get_appliance_power_state
+        power_state = get_appliance_power_state(
+            self.hass, self.config_manager, climate_entity
+        )
+        if power_state == "off":
+            _LOGGER.debug(
+                "Skipping presence turn_on for %s: power sensor reports off",
+                climate_entity,
+            )
+            return
+
         try:
             await self.hass.services.async_call(
                 "climate",
@@ -180,8 +191,15 @@ class PresenceTracker:
                 )
 
             from .tts_event import async_send_tts_for_event
+            from .notification_event import async_send_notification_for_event
 
             await async_send_tts_for_event(
+                self.hass,
+                self.config_manager,
+                climate_entity,
+                TTS_PRESENCE_ENTER,
+            )
+            await async_send_notification_for_event(
                 self.hass,
                 self.config_manager,
                 climate_entity,
@@ -213,8 +231,15 @@ class PresenceTracker:
             )
 
             from .tts_event import async_send_tts_for_event
+            from .notification_event import async_send_notification_for_event
 
             await async_send_tts_for_event(
+                self.hass,
+                self.config_manager,
+                climate_entity,
+                TTS_PRESENCE_LEAVE,
+            )
+            await async_send_notification_for_event(
                 self.hass,
                 self.config_manager,
                 climate_entity,

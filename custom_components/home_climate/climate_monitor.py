@@ -181,6 +181,17 @@ class ClimateMonitor:
                     target_mode = "off"
 
                 if target_mode != current_mode and target_mode is not None:
+                    if target_mode != "off":
+                        from .power_detector import get_appliance_power_state
+                        power_state = get_appliance_power_state(
+                            self.hass, config_manager, climate_entity
+                        )
+                        if power_state == "off":
+                            _LOGGER.debug(
+                                "Skipping turn_on for %s: power sensor reports off",
+                                climate_entity,
+                            )
+                            continue
                     await self._set_climate_mode(climate_entity, target_mode)
                     self._last_mode[climate_entity] = target_mode
                     self._cooldown_until[climate_entity] = now + self._COOLDOWN_SEC
@@ -204,8 +215,16 @@ class ClimateMonitor:
                 )
 
             from .tts_event import async_send_tts_for_event
+            from .notification_event import async_send_notification_for_event
 
             await async_send_tts_for_event(
+                self.hass,
+                self.config_manager,
+                entity_id,
+                TTS_MODE_CHANGE,
+                mode=mode,
+            )
+            await async_send_notification_for_event(
                 self.hass,
                 self.config_manager,
                 entity_id,

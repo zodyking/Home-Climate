@@ -106,6 +106,7 @@ async def websocket_get_entities(
         "zones": [],
         "media_players": [],
         "weather": [],
+        "notify": [],
     }
 
     for state in hass.states.async_all():
@@ -152,6 +153,13 @@ async def websocket_get_entities(
         if entity_type is None or entity_type == "weather":
             if entity_id.startswith("weather."):
                 result["weather"].append({
+                    "entity_id": entity_id,
+                    "friendly_name": friendly_name,
+                })
+
+        if entity_type is None or entity_type == "notify":
+            if entity_id.startswith("notify."):
+                result["notify"].append({
                     "entity_id": entity_id,
                     "friendly_name": friendly_name,
                 })
@@ -207,7 +215,12 @@ async def websocket_send_tts(
         connection.send_error(msg["id"], "tts_failed", str(e))
 
 
-def _get_climate_state(hass: HomeAssistant, entity_id: str) -> dict[str, Any]:
+def _get_climate_state(
+    hass: HomeAssistant,
+    entity_id: str,
+    config_manager: Any = None,
+    appliance: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Get climate entity state attributes for dashboard."""
     state = hass.states.get(entity_id)
     if not state:
@@ -233,9 +246,23 @@ def _get_climate_state(hass: HomeAssistant, entity_id: str) -> dict[str, Any]:
             max_temp = float(_max)
         except (ValueError, TypeError):
             pass
+
+    climate_state = state.state
+    climate_mode = attrs.get("hvac_mode")
+    if config_manager and appliance:
+        from .power_detector import get_appliance_power_state
+        power_state = get_appliance_power_state(hass, config_manager, entity_id)
+        if power_state is not None:
+            if power_state == "off":
+                climate_state = "off"
+                climate_mode = "off"
+            else:
+                climate_state = climate_mode or "heat"
+                climate_mode = climate_mode or "heat"
+
     return {
-        "climate_state": state.state,
-        "climate_mode": attrs.get("hvac_mode"),
+        "climate_state": climate_state,
+        "climate_mode": climate_mode,
         "target_temp": target_temp,
         "hvac_action": attrs.get("hvac_action"),
         "fan_mode": attrs.get("fan_mode"),
@@ -313,7 +340,11 @@ async def websocket_get_dashboard_data(
 
         for appliance in appliances:
             climate_entity = (appliance.get("climate_entity") or "").strip()
-            climate_data = _get_climate_state(hass, climate_entity) if climate_entity else {}
+            climate_data = (
+                _get_climate_state(hass, climate_entity, config_manager, appliance)
+                if climate_entity
+                else {}
+            )
             climate_current_temp = climate_data.get("current_temperature")
             if climate_current_temp is not None:
                 try:
@@ -434,8 +465,16 @@ async def websocket_set_climate_and_announce(
         config_manager = hass.data.get(DOMAIN, {}).get("config_manager")
         if config_manager:
             from .tts_event import async_send_tts_for_event
+            from .notification_event import async_send_notification_for_event
 
             await async_send_tts_for_event(
+                hass,
+                config_manager,
+                entity_id,
+                tts_event,
+                mode=tts_event == TTS_MODE_CHANGE and hvac_mode or "",
+            )
+            await async_send_notification_for_event(
                 hass,
                 config_manager,
                 entity_id,
@@ -487,9 +526,17 @@ async def websocket_set_temperature(
         config_manager = hass.data.get(DOMAIN, {}).get("config_manager")
         if config_manager:
             from .tts_event import async_send_tts_for_event
+            from .notification_event import async_send_notification_for_event
 
             temp_val = int(temperature) if temperature == int(temperature) else temperature
             await async_send_tts_for_event(
+                hass,
+                config_manager,
+                entity_id,
+                TTS_TEMP_CHANGE,
+                temp=temp_val,
+            )
+            await async_send_notification_for_event(
                 hass,
                 config_manager,
                 entity_id,
@@ -531,8 +578,16 @@ async def websocket_set_fan_mode(
         config_manager = hass.data.get(DOMAIN, {}).get("config_manager")
         if config_manager:
             from .tts_event import async_send_tts_for_event
+            from .notification_event import async_send_notification_for_event
 
             await async_send_tts_for_event(
+                hass,
+                config_manager,
+                entity_id,
+                TTS_FAN_CHANGE,
+                fan_mode=fan_mode,
+            )
+            await async_send_notification_for_event(
                 hass,
                 config_manager,
                 entity_id,

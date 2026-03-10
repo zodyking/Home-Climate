@@ -71,6 +71,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if presence_tracker:
         await presence_tracker.async_stop()
 
+    # Stop power detectors
+    from .power_detector import async_stop_power_detectors
+    async_stop_power_detectors(hass)
+
     # Remove panel
     try:
         frontend.async_remove_panel(hass, PANEL_URL)

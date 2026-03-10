@@ -573,7 +573,7 @@ class HomeWeatherPanel extends HTMLElement {
       ]);
       this._config = configRes || {};
       this._isAdmin = userRes?.is_admin === true;
-      this._entities = entitiesRes || { climate: [], sensors: [], persons: [], zones: [], media_players: [] };
+      this._entities = entitiesRes || { climate: [], sensors: [], persons: [], zones: [], media_players: [], weather: [], notify: [] };
       await this._loadDashboardData();
       this._loading = false;
       this._render();
@@ -727,39 +727,11 @@ class HomeWeatherPanel extends HTMLElement {
     }
   }
 
-  _render() {
+  _attachEventListeners() {
     const root = this.shadowRoot;
     if (!root) return;
 
-    root.innerHTML = `
-      <style>${STYLES}</style>
-      <div class="panel-container">
-        <header class="panel-header">
-          <div class="header-spacer"></div>
-          <div class="logo-section">
-            <img src="/home_climate_panel/icons/Logo.png" alt="Home Climate" />
-          </div>
-          <div class="header-right">
-            <button class="menu-btn" id="menu-btn" aria-label="Menu" title="Menu">
-              <svg viewBox="0 0 24 24"><path d="M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z"/></svg>
-            </button>
-            ${this._isAdmin ? `
-              <button type="button" class="settings-btn" aria-label="Settings" title="Settings" data-action="toggle-settings">
-                <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-              </button>
-            ` : ""}
-          </div>
-        </header>
-
-        ${this._loading ? '<div class="loading"><div class="loading-spinner" aria-hidden="true"></div>Loading...</div>' : ""}
-        ${this._error ? `<div class="error">${this._escapeHtml(this._error)}</div>` : ""}
-
-        ${!this._loading && !this._error && this._showSettings ? this._renderSettings() : ""}
-        ${!this._loading && !this._error && !this._showSettings ? this._renderDashboard() : ""}
-      </div>
-    `;
-
-    const settingsBtn = root.querySelector(".settings-btn");
+    const settingsBtn = root.querySelector("#settings-btn");
     if (settingsBtn) {
       settingsBtn.addEventListener("click", () => {
         this._showSettings = !this._showSettings;
@@ -807,6 +779,7 @@ class HomeWeatherPanel extends HTMLElement {
           media_player: "",
           volume: 0.7,
           tts_overrides: {},
+          notification_recipients: [],
           appliances: [],
         });
         this._collapsedRooms.add(`room-${this._config.rooms.length - 1}`);
@@ -883,6 +856,35 @@ class HomeWeatherPanel extends HTMLElement {
       });
     });
 
+    root.querySelectorAll("[data-action='add-notif-recipient']").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const roomIndex = parseInt(e.currentTarget.dataset.roomIndex, 10);
+        const rooms = this._config?.rooms || [];
+        const room = rooms[roomIndex];
+        if (!room) return;
+        room.notification_recipients = room.notification_recipients || [];
+        room.notification_recipients.push({ person: "", notify_entity: "" });
+        this._render();
+      });
+    });
+
+    root.querySelectorAll("[data-action='remove-notif-recipient']").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const row = e.target.closest(".notif-recipient-row");
+        if (!row) return;
+        const roomIndex = parseInt(row.dataset.roomIndex, 10);
+        const rooms = this._config?.rooms || [];
+        const room = rooms[roomIndex];
+        if (!room?.notification_recipients) return;
+        const idx = Array.from(row.parentElement.querySelectorAll(".notif-recipient-row")).indexOf(row);
+        if (idx >= 0) {
+          room.notification_recipients.splice(idx, 1);
+          this._render();
+        }
+      });
+    });
+
     root.querySelectorAll("[data-action='add-appliance']").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         const roomIndex = parseInt(e.currentTarget.dataset.roomIndex, 10);
@@ -915,7 +917,41 @@ class HomeWeatherPanel extends HTMLElement {
         this._render();
       });
     });
+  }
 
+  _render() {
+    const root = this.shadowRoot;
+    if (!root) return;
+
+    root.innerHTML = `
+      <style>${STYLES}</style>
+      <div class="panel-container">
+        <header class="panel-header">
+          <div class="header-spacer"></div>
+          <div class="logo-section">
+            <img src="/home_climate_panel/icons/Logo.png" alt="Home Climate" />
+          </div>
+          <div class="header-right">
+            <button class="menu-btn" id="menu-btn" aria-label="Menu" title="Menu">
+              <svg viewBox="0 0 24 24"><path d="M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z"/></svg>
+            </button>
+            ${this._isAdmin ? `
+              <button type="button" class="settings-btn" id="settings-btn" aria-label="Settings" title="Settings">
+                <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+              </button>
+            ` : ""}
+          </div>
+        </header>
+
+        ${this._loading ? '<div class="loading"><div class="loading-spinner" aria-hidden="true"></div>Loading...</div>' : ""}
+        ${this._error ? `<div class="error">${this._escapeHtml(this._error)}</div>` : ""}
+
+        ${!this._loading && !this._error && this._showSettings ? this._renderSettings() : ""}
+        ${!this._loading && !this._error && !this._showSettings ? this._renderDashboard() : ""}
+      </div>
+    `;
+
+    this._attachEventListeners();
     this._bindRoomControls(root);
 
     if (this._showSettings) {
@@ -1445,6 +1481,12 @@ class HomeWeatherPanel extends HTMLElement {
     if (entityType === "weather") {
       return (entities.weather || []).map((e) => ({ entity_id: e.entity_id, friendly_name: e.friendly_name || e.entity_id }));
     }
+    if (entityType === "notify") {
+      return (entities.notify || []).map((e) => ({ entity_id: e.entity_id, friendly_name: e.friendly_name || e.entity_id }));
+    }
+    if (entityType === "media_player") {
+      return (entities.media_players || []).map((e) => ({ entity_id: e.entity_id, friendly_name: e.friendly_name || e.entity_id }));
+    }
     return [];
   }
 
@@ -1462,6 +1504,22 @@ class HomeWeatherPanel extends HTMLElement {
       return { ...e, _score: score };
     }).filter((e) => e._score > 0).sort((a, b) => b._score - a._score);
     return scored.slice(0, 15).map(({ _score, ...e }) => e);
+  }
+
+  _renderEntityDropdown(value, entityType, fieldName, placeholder) {
+    const entities = this._getEntitiesForAutocomplete(entityType);
+    const opts = entities.map((e) => {
+      const id = (e.entity_id || "").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+      const label = this._escapeHtml(e.friendly_name || e.entity_id || "");
+      const sel = (value || "") === (e.entity_id || "") ? " selected" : "";
+      return `<option value="${id}"${sel}>${label}</option>`;
+    }).join("");
+    return `
+      <select class="form-select" data-field="${fieldName || ""}" data-entity-type="${entityType}">
+        <option value="">${this._escapeHtml(placeholder || "— None —")}</option>
+        ${opts}
+      </select>
+    `;
   }
 
   _renderEntityAutocomplete(value, entityType, fieldName, placeholder) {
@@ -1519,7 +1577,7 @@ class HomeWeatherPanel extends HTMLElement {
     }
     const ttsSettings = this._config?.tts_settings || {};
     const ttsMessages = ttsSettings.messages || {};
-    const entities = this._entities || { climate: [], sensors: [], persons: [], zones: [], media_players: [] };
+    const entities = this._entities || { climate: [], sensors: [], persons: [], zones: [], media_players: [], weather: [], notify: [] };
 
     const settingsStyles = `
       .settings-tabs { display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap; }
@@ -1575,6 +1633,7 @@ class HomeWeatherPanel extends HTMLElement {
           <button class="settings-tab ${this._settingsTab === "global" ? "active" : ""}" data-tab="global">Global Settings</button>
           <button class="settings-tab ${this._settingsTab === "rooms" ? "active" : ""}" data-tab="rooms">Rooms</button>
           <button class="settings-tab ${this._settingsTab === "tts" ? "active" : ""}" data-tab="tts">TTS</button>
+          <button class="settings-tab ${this._settingsTab === "notifications" ? "active" : ""}" data-tab="notifications">Notifications</button>
         </div>
 
         <div class="settings-tab-content ${this._settingsTab === "global" ? "active" : ""}" id="tab-global">
@@ -1623,6 +1682,38 @@ class HomeWeatherPanel extends HTMLElement {
                 const entry = ttsMessages[key] || { enabled: true, template: "" };
                 return `
                 <div class="tts-event-row" data-tts-key="${key}">
+                  <label class="form-label" style="min-width:120px;">${labels[key] || key}</label>
+                  <input type="text" class="form-input" data-field="template" value="${this._escapeHtml(entry.template || "")}" placeholder="e.g. {prefix} {room_name} {device_name} turned on">
+                  <label class="form-label" style="margin:0;">Enable</label>
+                  <input type="checkbox" class="tts-toggle" data-field="enabled" ${entry.enabled !== false ? "checked" : ""}>
+                </div>`;
+              }).join("")}
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-tab-content ${this._settingsTab === "notifications" ? "active" : ""}" id="tab-notifications">
+          <div class="settings-card">
+            <h3>Notification Settings</h3>
+            <div class="settings-section">
+              <h4 class="settings-section-title">Global settings</h4>
+              <div class="form-group">
+                <label class="form-label">Notification prefix (title)</label>
+                <input type="text" class="form-input" id="notif-prefix" value="${this._escapeHtml((this._config?.notification_settings || {}).prefix || "Home Climate")}">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Default notify service (fallback when room has no recipients)</label>
+                ${this._renderEntityDropdown((this._config?.notification_settings || {}).default_notify_service || "", "notify", "notif_default_service", "Select notify entity")}
+              </div>
+            </div>
+            <div class="settings-section-divider"></div>
+            <div class="settings-section">
+              <h4 class="settings-section-title">Event messages</h4>
+              <p class="form-label" style="margin-bottom:8px;">Variables: {prefix}, {room_name}, {device_name}, {device_type}, {mode}, {temp}, {fan_mode}</p>
+              ${ttsEventKeys.map((key) => {
+                const entry = (this._config?.notification_settings?.messages || {})[key] || { enabled: true, template: "" };
+                return `
+                <div class="tts-event-row notif-event-row" data-notif-key="${key}">
                   <label class="form-label" style="min-width:120px;">${labels[key] || key}</label>
                   <input type="text" class="form-input" data-field="template" value="${this._escapeHtml(entry.template || "")}" placeholder="e.g. {prefix} {room_name} {device_name} turned on">
                   <label class="form-label" style="margin:0;">Enable</label>
@@ -1688,6 +1779,19 @@ class HomeWeatherPanel extends HTMLElement {
             <label class="form-label">Volume (0-1)</label>
             <input type="number" class="form-input" data-field="volume" value="${room.volume ?? 0.7}" step="0.1" min="0" max="1">
           </div>
+          <div class="settings-section-divider"></div>
+          <h4 class="settings-section-title">Notification recipients (per-room)</h4>
+          <p class="form-label" style="margin-bottom:8px;opacity:0.8;">Person + notify entity for this room's notifications.</p>
+          <div id="notif-recipients-${index}" class="notif-recipients-list">
+            ${(room.notification_recipients || []).map((rec, ri) => `
+              <div class="notif-recipient-row" data-room-index="${index}" style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
+                ${this._renderEntityAutocomplete(rec.person || "", "person", "notif_person", "person")}
+                ${this._renderEntityDropdown(rec.notify_entity || "", "notify", "notif_entity", "notify entity")}
+                <button type="button" class="btn-delete" data-action="remove-notif-recipient">Remove</button>
+              </div>
+            `).join("")}
+          </div>
+          <button type="button" class="btn-add" data-action="add-notif-recipient" data-room-index="${index}">+ Add recipient</button>
         </div>
         <div class="settings-section-divider"></div>
         <div class="settings-section">
@@ -1793,6 +1897,28 @@ class HomeWeatherPanel extends HTMLElement {
           <input type="text" class="form-input" data-field="date_winter_end" value="${auto.date_winter_end || "03-31"}">
         </div>
         </div>
+        <div class="settings-section-divider"></div>
+        <div class="settings-section">
+          <h4 class="settings-section-title">Power sensor (optional override for on/off)</h4>
+          <div class="form-group">
+            <label class="form-label" style="display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" data-field="power_sensor_enabled" ${(app.power_sensor || {}).enabled ? "checked" : ""}>
+              Enable power sensor override
+            </label>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Power sensor</label>
+            ${this._renderEntityAutocomplete((app.power_sensor || {}).sensor || "", "sensor", "power_sensor_sensor", "e.g. sensor.power_consumption")}
+          </div>
+          <div class="form-group">
+            <label class="form-label">Power threshold (W) – above = on</label>
+            <input type="number" class="form-input" data-field="power_threshold_w" value="${(app.power_sensor || {}).power_threshold_w ?? 10}" min="0" step="0.5">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Debounce (seconds)</label>
+            <input type="number" class="form-input" data-field="power_debounce_sec" value="${(app.power_sensor || {}).debounce_sec ?? 5}" min="1" max="60">
+          </div>
+        </div>
         </div>
       </div>
     `;
@@ -1814,6 +1940,17 @@ class HomeWeatherPanel extends HTMLElement {
       const humidityEl = row.querySelector("[data-field='humidity_sensor']");
       const mediaEl = row.querySelector("[data-field='media_player']");
       const volumeEl = row.querySelector("[data-field='volume']");
+      const notifRecipientRows = row.querySelectorAll(".notif-recipient-row");
+      const notification_recipients = [];
+      notifRecipientRows.forEach((nrow) => {
+        const personInput = nrow.querySelector("[data-field='notif_person']");
+        const notifySelect = nrow.querySelector("[data-field='notif_entity']");
+        const person = (personInput?.value || "").trim();
+        const notify_entity = (notifySelect?.value || "").trim();
+        if (notify_entity) {
+          notification_recipients.push({ person: person || "", notify_entity });
+        }
+      });
 
       const appliances = [];
       const acards = root.querySelectorAll(`.appliance-card[data-room-index="${i}"]`);
@@ -1832,10 +1969,24 @@ class HomeWeatherPanel extends HTMLElement {
         const outdoorEl = acard.querySelector("[data-field='outdoor_temp_sensor']");
         const winterStartEl = acard.querySelector("[data-field='date_winter_start']");
         const winterEndEl = acard.querySelector("[data-field='date_winter_end']");
+        const powerSensorEnabledEl = acard.querySelector("[data-field='power_sensor_enabled']");
+        const powerSensorEl = acard.querySelector("[data-field='power_sensor_sensor']");
+        const powerThresholdEl = acard.querySelector("[data-field='power_threshold_w']");
+        const powerDebounceEl = acard.querySelector("[data-field='power_debounce_sec']");
 
         const existingRoom = this._config?.rooms?.[i];
         const existingApps = existingRoom?.appliances || [];
         const existingApp = existingApps[appliances.length];
+
+        const powerSensorEnabled = powerSensorEnabledEl?.checked === true;
+        const powerSensor = powerSensorEnabled
+          ? {
+              enabled: true,
+              sensor: (powerSensorEl?.value || "").trim(),
+              power_threshold_w: parseFloat(powerThresholdEl?.value) || 10,
+              debounce_sec: Math.max(1, Math.min(60, parseInt(powerDebounceEl?.value, 10) || 5)),
+            }
+          : {};
 
         appliances.push({
           id: existingApp?.id || crypto.randomUUID(),
@@ -1855,6 +2006,7 @@ class HomeWeatherPanel extends HTMLElement {
             date_winter_start: (winterStartEl?.value || "11-01").trim(),
             date_winter_end: (winterEndEl?.value || "03-31").trim(),
           },
+          power_sensor: powerSensor,
         });
       });
 
@@ -1866,6 +2018,7 @@ class HomeWeatherPanel extends HTMLElement {
         media_player: (mediaEl?.value || "").trim() || "",
         volume: parseFloat(volumeEl?.value) || 0.7,
         tts_overrides: {},
+        notification_recipients,
         appliances,
       });
     }
@@ -1888,6 +2041,24 @@ class HomeWeatherPanel extends HTMLElement {
       const templateEl = row?.querySelector("[data-field='template']");
       const enabledEl = row?.querySelector("[data-field='enabled']");
       config.tts_settings.messages[key] = {
+        template: (templateEl?.value || "").trim(),
+        enabled: enabledEl?.checked !== false,
+      };
+    });
+
+    const notifPrefixEl = root.querySelector("#notif-prefix");
+    const notifDefaultEl = root.querySelector("[data-field='notif_default_service']");
+    config.notification_settings = {
+      ...(config.notification_settings || {}),
+      prefix: notifPrefixEl?.value || "Home Climate",
+      default_notify_service: (notifDefaultEl?.value || "").trim(),
+      messages: config.notification_settings?.messages || {},
+    };
+    ttsEventKeys.forEach((key) => {
+      const row = root.querySelector(`[data-notif-key="${key}"]`);
+      const templateEl = row?.querySelector("[data-field='template']");
+      const enabledEl = row?.querySelector("[data-field='enabled']");
+      config.notification_settings.messages[key] = {
         template: (templateEl?.value || "").trim(),
         enabled: enabledEl?.checked !== false,
       };

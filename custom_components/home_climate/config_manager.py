@@ -17,9 +17,13 @@ from .const import (
     DEFAULT_ENTER_DURATION_SEC,
     DEFAULT_EXIT_DURATION_SEC,
     DEFAULT_HEAT_THRESHOLD_C,
+    DEFAULT_NOTIFICATION_MESSAGES,
     DEFAULT_OUTDOOR_COOL_ONLY_ABOVE_C,
     DEFAULT_OUTDOOR_HEAT_ONLY_BELOW_C,
+    DEFAULT_POWER_DEBOUNCE_SEC,
+    DEFAULT_POWER_THRESHOLD_W,
     DEVICE_TYPES,
+    NOTIFICATION_EVENT_KEYS,
     SEASONAL_MODES,
     TTS_EVENT_KEYS,
     DEFAULT_TTS_MESSAGES,
@@ -86,6 +90,13 @@ class ConfigManager:
     def tts_settings(self) -> dict[str, Any]:
         """Return TTS settings."""
         return self._config.get("tts_settings", DEFAULT_CONFIG["tts_settings"])
+
+    @property
+    def notification_settings(self) -> dict[str, Any]:
+        """Return notification settings."""
+        return self._config.get(
+            "notification_settings", DEFAULT_CONFIG["notification_settings"]
+        )
 
     def get_room_for_climate_entity(self, climate_entity: str) -> tuple[dict, dict] | None:
         """Return (room, appliance) for a climate entity, or None."""
@@ -251,6 +262,13 @@ class ConfigManager:
         if "tts_settings" in loaded and isinstance(loaded["tts_settings"], dict):
             result["tts_settings"] = self._validate_tts_settings(loaded["tts_settings"])
 
+        if "notification_settings" in loaded and isinstance(
+            loaded["notification_settings"], dict
+        ):
+            result["notification_settings"] = self._validate_notification_settings(
+                loaded["notification_settings"]
+            )
+
         return result
 
     def _validate_rooms(self, rooms: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -260,6 +278,17 @@ class ConfigManager:
             if not isinstance(room, dict) or not room.get("name"):
                 continue
             room_id = room.get("id") or str(uuid.uuid4())
+            notification_recipients = []
+            for rec in room.get("notification_recipients") or []:
+                if isinstance(rec, dict):
+                    person = str(rec.get("person", "")).strip()
+                    notify_entity = str(rec.get("notify_entity", "")).strip()
+                    if notify_entity:
+                        notification_recipients.append({
+                            "person": person,
+                            "notify_entity": notify_entity,
+                        })
+
             validated.append({
                 "id": room_id,
                 "name": str(room.get("name", "")).strip(),
@@ -268,6 +297,7 @@ class ConfigManager:
                 "media_player": str(room.get("media_player", "")).strip() or "",
                 "volume": max(0.0, min(1.0, _safe_float(room.get("volume"), 0.7))),
                 "tts_overrides": dict(room.get("tts_overrides") or {}),
+                "notification_recipients": notification_recipients,
                 "appliances": self._validate_appliances(room.get("appliances") or []),
             })
         return validated
@@ -303,14 +333,63 @@ class ConfigManager:
                 else:
                     auto[k] = auto_raw.get(k, default_val)
 
+            power_sensor_raw = app.get("power_sensor") or {}
+            power_sensor = {}
+            if isinstance(power_sensor_raw, dict) and power_sensor_raw.get("enabled"):
+                power_sensor = {
+                    "enabled": True,
+                    "sensor": str(power_sensor_raw.get("sensor", "")).strip() or "",
+                    "power_threshold_w": max(
+                        0,
+                        min(5000, _safe_float(power_sensor_raw.get("power_threshold_w"), DEFAULT_POWER_THRESHOLD_W)),
+                    ),
+                    "debounce_sec": max(1, min(60, _safe_int(power_sensor_raw.get("debounce_sec"), DEFAULT_POWER_DEBOUNCE_SEC))),
+                }
+
             validated.append({
                 "id": app_id,
                 "device_type": dtype,
                 "custom_name": str(app.get("custom_name", "")).strip(),
                 "climate_entity": climate_entity,
                 "automation": auto,
+                "power_sensor": power_sensor,
             })
         return validated
+
+    def _validate_notification_settings(
+        self, notif: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Validate notification settings with messages structure."""
+        default = DEFAULT_CONFIG["notification_settings"]
+        messages = {}
+        for key in NOTIFICATION_EVENT_KEYS:
+            entry = notif.get("messages", {}).get(key)
+            if isinstance(entry, dict):
+                messages[key] = {
+                    "enabled": bool(entry.get("enabled", True)),
+                    "template": str(
+                        entry.get(
+                            "template",
+                            DEFAULT_NOTIFICATION_MESSAGES.get(key, ""),
+                        )
+                    ),
+                }
+            else:
+                messages[key] = default["messages"].get(
+                    key,
+                    {
+                        "enabled": True,
+                        "template": DEFAULT_NOTIFICATION_MESSAGES.get(key, ""),
+                    },
+                )
+
+        return {
+            "prefix": str(notif.get("prefix", default["prefix"])),
+            "default_notify_service": str(
+                notif.get("default_notify_service", default["default_notify_service"])
+            ).strip(),
+            "messages": messages,
+        }
 
     def _validate_tts_settings(self, tts: dict[str, Any]) -> dict[str, Any]:
         """Validate TTS settings with messages structure."""
@@ -345,5 +424,9 @@ class ConfigManager:
         if "tts_settings" in new_config:
             self._config["tts_settings"] = self._validate_tts_settings(
                 new_config["tts_settings"]
+            )
+        if "notification_settings" in new_config:
+            self._config["notification_settings"] = self._validate_notification_settings(
+                new_config["notification_settings"]
             )
         await self.async_save()

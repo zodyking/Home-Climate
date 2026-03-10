@@ -73,6 +73,10 @@ DEFAULT_OUTDOOR_COOL_ONLY_ABOVE_C = 25
 DEFAULT_ENTER_DURATION_SEC = 30
 DEFAULT_EXIT_DURATION_SEC = 300
 
+# Power sensor (per-appliance, optional override for on/off detection)
+DEFAULT_POWER_THRESHOLD_W = 10.0
+DEFAULT_POWER_DEBOUNCE_SEC = 5
+
 # Seasonal modes
 SEASONAL_MODE_OUTDOOR_TEMP = "outdoor_temp"
 SEASONAL_MODE_DATE = "date"
@@ -110,10 +114,29 @@ def default_appliance_automation() -> dict:
     }
 
 
+# Notification settings (mirror TTS)
+DEFAULT_NOTIFICATION_PREFIX = "Home Climate"
+NOTIFICATION_EVENT_KEYS = list(TTS_EVENT_KEYS)  # Same events as TTS
+DEFAULT_NOTIFICATION_MESSAGES = dict(DEFAULT_TTS_MESSAGES)
+
+
+def _default_notification_messages() -> dict:
+    """Build default notification messages dict with enabled + template per event."""
+    return {
+        key: {"enabled": True, "template": DEFAULT_NOTIFICATION_MESSAGES.get(key, "")}
+        for key in NOTIFICATION_EVENT_KEYS
+    }
+
+
 # Default config structure (new schema)
 DEFAULT_CONFIG = {
     "rooms": [],
     "weather_entity": "",
+    "notification_settings": {
+        "prefix": DEFAULT_NOTIFICATION_PREFIX,
+        "default_notify_service": "",
+        "messages": _default_notification_messages(),
+    },
     "tts_settings": {
         "language": DEFAULT_TTS_LANGUAGE,
         "speed": DEFAULT_TTS_SPEED,
