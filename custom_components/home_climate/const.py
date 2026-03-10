@@ -1,7 +1,24 @@
 """Constants for Home Climate integration."""
 from __future__ import annotations
 
+from typing import Any
+
 DOMAIN = "home_climate"
+
+
+def parse_temp_from_state(value: Any, unit: str | None) -> float | None:
+    """Parse temp from sensor state; converts °F to °C. Returns Celsius or None."""
+    if value is None or value == "":
+        return None
+    try:
+        temp = float(str(value).strip())
+    except (ValueError, TypeError):
+        return None
+    if unit and "f" in str(unit).lower():
+        temp = (temp - 32) * 5 / 9
+    return temp
+
+
 NAME = "Home Climate"
 
 # Config file
@@ -30,6 +47,7 @@ TTS_PRESENCE_LEAVE = "presence_leave"
 TTS_FAN_CHANGE = "fan_change"
 TTS_AUTO_MODE_CHANGE = "auto_mode_change"
 TTS_COMFORT_ADJUSTED = "comfort_adjusted"
+TTS_COMFORT_REVERT = "comfort_revert"
 
 TTS_EVENT_KEYS = [
     TTS_MANUAL_ON,
@@ -41,6 +59,7 @@ TTS_EVENT_KEYS = [
     TTS_FAN_CHANGE,
     TTS_AUTO_MODE_CHANGE,
     TTS_COMFORT_ADJUSTED,
+    TTS_COMFORT_REVERT,
 ]
 
 # Default templates per event (TTS uses prefix in message)
@@ -54,6 +73,7 @@ DEFAULT_TTS_MESSAGES = {
     TTS_FAN_CHANGE: "{prefix} {room_name} {device_name} fan set to {fan_mode}",
     TTS_AUTO_MODE_CHANGE: "{prefix} {room_name} {device_name} set to {mode} by automation",
     TTS_COMFORT_ADJUSTED: "{prefix} {room_name} {device_name} could not reach comfort temp; target adjusted to {temp}",
+    TTS_COMFORT_REVERT: "{prefix} {room_name} {device_name}: Room already at comfort temp of {temp}, reverted to fan only mode",
 }
 
 # Device types for appliances
@@ -127,6 +147,8 @@ def default_appliance_automation() -> dict:
         "cool_threshold_c": DEFAULT_COOL_THRESHOLD_C,
         "heat_automation_enabled": True,
         "cool_automation_enabled": True,
+        "block_heat_in_summer": True,
+        "block_cool_in_winter": True,
         "dry_automation_enabled": False,
         "dry_humidity_threshold_pct": DEFAULT_DRY_HUMIDITY_THRESHOLD_PCT,
         "dry_temp_min_c": DEFAULT_DRY_TEMP_MIN_C,
@@ -153,6 +175,7 @@ DEFAULT_NOTIFICATION_MESSAGES = {
     TTS_FAN_CHANGE: "{room_name} {device_name} fan set to {fan_mode}",
     TTS_AUTO_MODE_CHANGE: "{room_name} {device_name} set to {mode} by automation",
     TTS_COMFORT_ADJUSTED: "{room_name} {device_name} could not reach comfort temp; target adjusted to {temp}",
+    TTS_COMFORT_REVERT: "{room_name} {device_name}: Room already at comfort temp of {temp}, reverted to fan only mode",
 }
 
 

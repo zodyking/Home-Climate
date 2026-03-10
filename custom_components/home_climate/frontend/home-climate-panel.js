@@ -1573,6 +1573,7 @@ class HomeWeatherPanel extends HTMLElement {
       fan_change: "Fan speed change",
       auto_mode_change: "Automation mode change",
       comfort_adjusted: "Comfort temp adjusted (struggle)",
+      comfort_revert: "Room at comfort – reverted to fan only",
     };
   }
 
@@ -1631,7 +1632,7 @@ class HomeWeatherPanel extends HTMLElement {
       .tts-toggle { min-width: 50px; }
     `;
 
-    const ttsEventKeys = ["manual_on", "manual_off", "mode_change", "temp_change", "presence_enter", "presence_leave", "fan_change", "auto_mode_change", "comfort_adjusted"];
+    const ttsEventKeys = ["manual_on", "manual_off", "mode_change", "temp_change", "presence_enter", "presence_leave", "fan_change", "auto_mode_change", "comfort_adjusted", "comfort_revert"];
     const labels = this._ttsEventLabels();
 
     return `
@@ -1895,7 +1896,7 @@ class HomeWeatherPanel extends HTMLElement {
         <div class="settings-section-divider"></div>
         <div class="settings-section">
           <h4 class="settings-section-title">Automations</h4>
-        <p class="form-label" style="margin-bottom:10px;opacity:0.85;">No AC in winter (Nov–Mar). No heat in summer (Jun–Aug).</p>
+        <p class="form-label" style="margin-bottom:10px;opacity:0.85;">Optional: block heat in summer and cool in winter to save energy. Uncheck to allow when needed.</p>
         <div class="form-group">
           <label class="form-label" style="display:flex;align-items:center;gap:8px;">
             <input type="checkbox" data-field="heat_automation_enabled" ${auto.heat_automation_enabled !== false ? "checked" : ""}>
@@ -1911,6 +1912,18 @@ class HomeWeatherPanel extends HTMLElement {
           <input type="number" class="form-input" data-field="cool_threshold_c" value="${this._cToF(auto.cool_threshold_c ?? this._fToC(79))}" step="0.5">
         </div>
         ${(app.is_smart_appliance !== false) ? `
+        <div class="form-group">
+          <label class="form-label" style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" data-field="block_heat_in_summer" ${auto.block_heat_in_summer !== false ? "checked" : ""}>
+            Block heat in summer (Jun–Aug)
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="form-label" style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" data-field="block_cool_in_winter" ${auto.block_cool_in_winter !== false ? "checked" : ""}>
+            Block cool in winter (Nov–Mar)
+          </label>
+        </div>
         <div class="form-group">
           <label class="form-label" style="display:flex;align-items:center;gap:8px;">
             <input type="checkbox" data-field="dry_automation_enabled" ${auto.dry_automation_enabled ? "checked" : ""}>
@@ -1993,6 +2006,8 @@ class HomeWeatherPanel extends HTMLElement {
         const heatEl = acard.querySelector("[data-field='heat_threshold_c']");
         const coolEnabledEl = acard.querySelector("[data-field='cool_automation_enabled']");
         const coolEl = acard.querySelector("[data-field='cool_threshold_c']");
+        const blockHeatSummerEl = acard.querySelector("[data-field='block_heat_in_summer']");
+        const blockCoolWinterEl = acard.querySelector("[data-field='block_cool_in_winter']");
         const dryEnabledEl = acard.querySelector("[data-field='dry_automation_enabled']");
         const dryHumidityEl = acard.querySelector("[data-field='dry_humidity_threshold_pct']");
         const dryTempMinEl = acard.querySelector("[data-field='dry_temp_min_c']");
@@ -2031,6 +2046,8 @@ class HomeWeatherPanel extends HTMLElement {
             heat_threshold_c: this._fToC(parseFloat(heatEl?.value)) || 18,
             cool_automation_enabled: coolEnabledEl?.checked !== false,
             cool_threshold_c: this._fToC(parseFloat(coolEl?.value)) || 26,
+            block_heat_in_summer: blockHeatSummerEl?.checked !== false,
+            block_cool_in_winter: blockCoolWinterEl?.checked !== false,
             dry_automation_enabled: dryEnabledEl?.checked === true,
             dry_humidity_threshold_pct: Math.max(0, Math.min(100, parseFloat(dryHumidityEl?.value) || 60)),
             dry_temp_min_c: this._fToC(parseFloat(dryTempMinEl?.value)) ?? 18,
@@ -2076,7 +2093,7 @@ class HomeWeatherPanel extends HTMLElement {
       messages: {},
     };
 
-    const ttsEventKeys = ["manual_on", "manual_off", "mode_change", "temp_change", "presence_enter", "presence_leave", "fan_change", "auto_mode_change", "comfort_adjusted"];
+    const ttsEventKeys = ["manual_on", "manual_off", "mode_change", "temp_change", "presence_enter", "presence_leave", "fan_change", "auto_mode_change", "comfort_adjusted", "comfort_revert"];
     ttsEventKeys.forEach((key) => {
       const row = root.querySelector(`[data-tts-key="${key}"]`);
       const templateEl = row?.querySelector("[data-field='template']");

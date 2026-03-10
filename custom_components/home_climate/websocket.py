@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import (
     DOMAIN,
+    parse_temp_from_state,
     TTS_MANUAL_ON,
     TTS_MANUAL_OFF,
     TTS_MODE_CHANGE,
@@ -354,6 +355,12 @@ async def websocket_get_dashboard_data(
                 except (ValueError, TypeError):
                     pass
 
+    def _c_to_display(temp_c: float, unit: str) -> float:
+        """Convert Celsius to display unit."""
+        if unit == "°F":
+            return temp_c * 9 / 5 + 32
+        return temp_c
+
     for room in config_manager.rooms:
         temp = None
         humidity = None
@@ -361,10 +368,10 @@ async def websocket_get_dashboard_data(
         if room.get("temp_sensor"):
             state = hass.states.get(room["temp_sensor"])
             if state and state.state not in ("unknown", "unavailable"):
-                try:
-                    temp = float(state.state)
-                except (ValueError, TypeError):
-                    pass
+                unit = state.attributes.get("unit_of_measurement") if state.attributes else None
+                temp_c = parse_temp_from_state(state.state, unit)
+                if temp_c is not None:
+                    temp = _c_to_display(temp_c, temp_unit)
 
         if room.get("humidity_sensor"):
             state = hass.states.get(room["humidity_sensor"])

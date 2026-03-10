@@ -12,7 +12,7 @@ from homeassistant.helpers.event import async_track_state_change_event
 if TYPE_CHECKING:
     from .config_manager import ConfigManager
 
-from .const import DOMAIN, TTS_PRESENCE_ENTER, TTS_PRESENCE_LEAVE
+from .const import DOMAIN, parse_temp_from_state, TTS_PRESENCE_ENTER, TTS_PRESENCE_LEAVE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -245,10 +245,10 @@ class PresenceTracker:
             if temp_sensor:
                 tstate = self.hass.states.get(temp_sensor)
                 if tstate and tstate.state not in ("unknown", "unavailable"):
-                    try:
-                        room_temp = float(tstate.state)
-                    except (ValueError, TypeError):
-                        pass
+                    unit = tstate.attributes.get("unit_of_measurement") if tstate.attributes else None
+                    parsed = parse_temp_from_state(tstate.state, unit)
+                    if parsed is not None:
+                        room_temp = parsed
             mode = "heat" if room_temp < comfort_temp else "cool"
             min_t, max_t = 16.0, 30.0
             if climate_entity:

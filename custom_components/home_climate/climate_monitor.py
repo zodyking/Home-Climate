@@ -16,9 +16,11 @@ from .const import (
     DEFAULT_DRY_HUMIDITY_THRESHOLD_PCT,
     DEFAULT_DRY_TEMP_MIN_C,
     DOMAIN,
+    parse_temp_from_state,
     STRUGGLE_HOUR_SEC,
     TTS_AUTO_MODE_CHANGE,
     TTS_COMFORT_ADJUSTED,
+    TTS_COMFORT_REVERT,
 )
 
 if TYPE_CHECKING:
@@ -31,19 +33,6 @@ STRUGGLE_PROGRESS_THRESHOLD_C = 0.5
 STRUGGLE_REDUCE_CAP_C = 1.0  # Cap set temp at comfort ± this when struggling
 STRUGGLE_RECHECK_MIN = 15  # Min to recheck after reducing set temp
 DYNAMIC_SCALE = 0.5  # Linear: gap of 4°C -> 2°C offset
-
-
-def _parse_temp(value: Any, unit: str | None) -> float | None:
-    """Parse temperature from state, return Celsius or None."""
-    if value is None or value == "":
-        return None
-    try:
-        temp = float(str(value).strip())
-    except (ValueError, TypeError):
-        return None
-    if unit and "f" in unit.lower():
-        temp = (temp - 32) * 5 / 9
-    return temp
 
 
 def _is_winter_month() -> bool:
@@ -197,7 +186,7 @@ class ClimateMonitor:
                 continue
 
             unit = state.attributes.get("unit_of_measurement")
-            indoor_temp = _parse_temp(state.state, unit)
+            indoor_temp = parse_temp_from_state(state.state, unit)
             if indoor_temp is None:
                 continue
 
@@ -231,8 +220,14 @@ class ClimateMonitor:
                 dry_humidity_pct = float(auto.get("dry_humidity_threshold_pct", DEFAULT_DRY_HUMIDITY_THRESHOLD_PCT))
                 dry_temp_min = float(auto.get("dry_temp_min_c", DEFAULT_DRY_TEMP_MIN_C))
 
-                heat_allowed = not _is_summer_month() if is_smart else True
-                cool_allowed = not _is_winter_month() if is_smart else True
+                if is_smart:
+                    block_heat = auto.get("block_heat_in_summer", True)
+                    block_cool = auto.get("block_cool_in_winter", True)
+                    heat_allowed = (not _is_summer_month()) or (not block_heat)
+                    cool_allowed = (not _is_winter_month()) or (not block_cool)
+                else:
+                    heat_allowed = True
+                    cool_allowed = True
 
                 if is_smart:
                     await self._check_smart_appliance(
@@ -304,9 +299,21 @@ class ClimateMonitor:
 
         target_phase = phase
         if self._at_comfort(indoor_temp, comfort_temp, comfort_tolerance):
-            if phase in ("heating", "cooling"):
+            current_lower = (current_mode or "").strip().lower()
+            if current_lower in ("heat", "cool"):
                 target_phase = "fan_only" if supports_fan_only else "off"
-                await self._transition_to_fan_or_off(climate_entity, target_phase, power_switch, config_manager)
+                temp_unit = getattr(
+                    self.hass.config.units, "temperature_unit", "°C"
+                )
+                temp_display = (
+                    round(indoor_temp * 9 / 5 + 32, 1)
+                    if temp_unit == "°F"
+                    else round(indoor_temp, 1)
+                )
+                await self._transition_to_fan_or_off(
+                    climate_entity, target_phase, power_switch, config_manager,
+                    comfort_revert_temp=temp_display,
+                )
                 astate["phase"] = "idle"
                 astate["phase_started_at"] = 0
                 astate["progress_checks"] = []
@@ -531,7 +538,12 @@ class ClimateMonitor:
                 self._cooldown_until[key] = now + self._COOLDOWN_SEC
 
     async def _transition_to_fan_or_off(
-        self, climate_entity: str, target: str, power_switch: str | None, config_manager: "ConfigManager",
+        self,
+        climate_entity: str,
+        target: str,
+        power_switch: str | None,
+        config_manager: "ConfigManager",
+        comfort_revert_temp: float | None = None,
     ) -> None:
         """Switch to fan_only or turn off."""
         if target == "fan_only":
@@ -552,13 +564,25 @@ class ClimateMonitor:
         try:
             from .tts_event import async_send_tts_for_event
             from .notification_event import async_send_notification_for_event
-            mode_label = "fan only" if target == "fan_only" else "off"
-            await async_send_tts_for_event(
-                self.hass, config_manager, climate_entity, TTS_AUTO_MODE_CHANGE, mode=mode_label,
-            )
-            await async_send_notification_for_event(
-                self.hass, config_manager, climate_entity, TTS_AUTO_MODE_CHANGE, mode=mode_label,
-            )
+            if comfort_revert_temp is not None:
+                await async_send_tts_for_event(
+                    self.hass, config_manager, climate_entity,
+                    TTS_COMFORT_REVERT, temp=comfort_revert_temp,
+                )
+                await async_send_notification_for_event(
+                    self.hass, config_manager, climate_entity,
+                    TTS_COMFORT_REVERT, temp=comfort_revert_temp,
+                )
+            else:
+                mode_label = "fan only" if target == "fan_only" else "off"
+                await async_send_tts_for_event(
+                    self.hass, config_manager, climate_entity,
+                    TTS_AUTO_MODE_CHANGE, mode=mode_label,
+                )
+                await async_send_notification_for_event(
+                    self.hass, config_manager, climate_entity,
+                    TTS_AUTO_MODE_CHANGE, mode=mode_label,
+                )
         except Exception as e:
             _LOGGER.warning("Failed to send mode change: %s", e)
 

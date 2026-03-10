@@ -356,7 +356,7 @@ class ConfigManager:
                     auto[k] = max(0, min(3600, _safe_int(auto_raw.get(k), default_val)))
                 elif k in ("heat_threshold_c", "cool_threshold_c"):
                     auto[k] = max(5, min(40, _safe_float(auto_raw.get(k), default_val)))
-                elif k in ("heat_automation_enabled", "cool_automation_enabled", "dry_automation_enabled"):
+                elif k in ("heat_automation_enabled", "cool_automation_enabled", "dry_automation_enabled", "block_heat_in_summer", "block_cool_in_winter"):
                     auto[k] = bool(auto_raw.get(k, default_val))
                 elif k == "dry_humidity_threshold_pct":
                     auto[k] = max(0, min(100, _safe_float(auto_raw.get(k), DEFAULT_DRY_HUMIDITY_THRESHOLD_PCT)))
