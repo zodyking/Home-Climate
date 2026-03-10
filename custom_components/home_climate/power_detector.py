@@ -74,7 +74,7 @@ class PowerStateTracker:
 
     def start(self) -> None:
         """Start listening to power sensor."""
-        from homeassistant.helpers.event import async_track_state_change
+        from homeassistant.helpers.event import async_track_state_change_event
 
         state = self.hass.states.get(self.sensor)
         if state and state.state not in ("unknown", "unavailable"):
@@ -84,8 +84,18 @@ class PowerStateTracker:
                 self._values.append((now, power))
                 self._last_state = "on" if power > self.threshold_w else "off"
 
-        self._unsub = async_track_state_change(
-            self.hass, self.sensor, self._on_state_change
+        self._unsub = async_track_state_change_event(
+            self.hass, [self.sensor], self._on_state_change_event
+        )
+
+    @callback
+    def _on_state_change_event(self, event) -> None:
+        """Handle power sensor state change (StateChanged event)."""
+        data = event.data
+        self._on_state_change(
+            data["entity_id"],
+            data.get("old_state"),
+            data.get("new_state"),
         )
 
     def stop(self) -> None:

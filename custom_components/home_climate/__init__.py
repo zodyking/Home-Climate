@@ -76,10 +76,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async_stop_power_detectors(hass)
 
     # Remove panel
-    try:
-        frontend.async_remove_panel(hass, PANEL_URL)
-    except KeyError:
-        pass
+    panels = hass.data.get(DATA_PANELS, {})
+    if isinstance(panels, dict) and PANEL_URL in panels:
+        try:
+            frontend.async_remove_panel(hass, PANEL_URL)
+        except KeyError:
+            pass
 
     hass.data.pop(DOMAIN, None)
     return True
@@ -105,10 +107,13 @@ async def async_register_panels(hass: HomeAssistant, entry: ConfigEntry) -> None
         StaticPathConfig(panel_url, frontend_path, cache_headers=False)
     ])
 
-    try:
-        frontend.async_remove_panel(hass, PANEL_URL)
-    except KeyError:
-        pass
+    # Only remove if panel was previously registered (avoids "unknown panel" warning)
+    panels = hass.data.get(DATA_PANELS, {})
+    if isinstance(panels, dict) and PANEL_URL in panels:
+        try:
+            frontend.async_remove_panel(hass, PANEL_URL)
+        except KeyError:
+            pass
     await panel_custom.async_register_panel(
         hass,
         webcomponent_name="home-climate-panel",

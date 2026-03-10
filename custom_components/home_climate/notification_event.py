@@ -69,17 +69,20 @@ async def async_send_notification_for_event(
 
     notif_settings = config_manager.notification_settings
     if not notif_settings.get("enabled", True):
+        _LOGGER.debug("Notifications disabled globally, skipping for %s", event)
         return
 
     notify_entity = (room.get("notify_entity") or "").strip() or (notif_settings.get("notify_entity") or "").strip()
     if not notify_entity:
         _LOGGER.debug(
-            "No notify entity configured, skipping notification for %s",
+            "No notify entity configured for room %s, skipping notification for %s",
             room.get("name"),
+            event,
         )
         return
     msg_entry = notif_settings.get("messages", {}).get(event)
     if not msg_entry or not msg_entry.get("enabled", True):
+        _LOGGER.debug("Notification for event %s disabled or no template", event)
         return
 
     template = msg_entry.get("template", "")
@@ -113,12 +116,13 @@ async def async_send_notification_for_event(
         return
 
     title = prefix
+    entity_id = notify_entity if notify_entity.startswith("notify.") else f"notify.{notify_entity}"
+    service_name = entity_id.split(".", 1)[1] if "." in entity_id else notify_entity
+
+    _LOGGER.debug(
+        "Sending notification for %s to %s: %s", event, entity_id, message[:80]
+    )
     try:
-        service_name = (
-            notify_entity.split(".", 1)[1]
-            if notify_entity.startswith("notify.")
-            else notify_entity
-        )
         await hass.services.async_call(
             "notify",
             service_name,
@@ -127,5 +131,8 @@ async def async_send_notification_for_event(
         )
     except Exception as e:
         _LOGGER.warning(
-            "Failed to send notification to %s: %s", notify_entity, e
+            "Failed to send notification to %s for %s: %s",
+            entity_id,
+            event,
+            e,
         )

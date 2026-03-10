@@ -1694,10 +1694,7 @@ class HomeWeatherPanel extends HTMLElement {
                   Enable notifications
                 </label>
               </div>
-              <div class="form-group">
-                <label class="form-label">Notify entity</label>
-                ${this._renderEntityDropdown((this._config?.notification_settings || {}).notify_entity || (this._config?.notification_settings || {}).default_notify_service || "", "notify", "notif_entity", "Select notify entity")}
-              </div>
+              <p class="form-label" style="margin-bottom:8px;opacity:0.85;">Set Notify entity per room in Room details.</p>
               <div class="form-group">
                 <label class="form-label">Notification prefix (title)</label>
                 <input type="text" class="form-input" id="notif-prefix" value="${this._escapeHtml((this._config?.notification_settings || {}).prefix || "Home Climate")}">
@@ -2053,11 +2050,9 @@ class HomeWeatherPanel extends HTMLElement {
 
     const notifPrefixEl = root.querySelector("#notif-prefix");
     const notifEnabledEl = root.querySelector("#notif-enabled");
-    const notifEntityEl = root.querySelector("[data-field='notif_entity']");
     config.notification_settings = {
       ...(config.notification_settings || {}),
       enabled: notifEnabledEl?.checked !== false,
-      notify_entity: (notifEntityEl?.value || "").trim(),
       prefix: notifPrefixEl?.value || "Home Climate",
       messages: config.notification_settings?.messages || {},
     };

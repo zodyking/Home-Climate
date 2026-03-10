@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.event import async_track_state_change
+from homeassistant.helpers.event import async_track_state_change_event
 
 if TYPE_CHECKING:
     from .config_manager import ConfigManager
@@ -111,13 +111,23 @@ class PresenceTracker:
                 if person and person.startswith("person."):
                     person_entities.add(person)
 
-        for entity_id in person_entities:
-            unsub = async_track_state_change(
+        if person_entities:
+            unsub = async_track_state_change_event(
                 self.hass,
-                entity_id,
-                self._on_person_state_change,
+                list(person_entities),
+                self._on_person_state_change_event,
             )
             self._unsubscribe.append(unsub)
+
+    @callback
+    def _on_person_state_change_event(self, event) -> None:
+        """Handle person state change (StateChanged event)."""
+        data = event.data
+        self._on_person_state_change(
+            data["entity_id"],
+            data.get("old_state"),
+            data.get("new_state"),
+        )
 
     @callback
     def _on_person_state_change(
