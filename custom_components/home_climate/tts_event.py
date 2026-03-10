@@ -15,6 +15,7 @@ from .const import (
     TTS_PRESENCE_ENTER,
     TTS_PRESENCE_LEAVE,
     TTS_FAN_CHANGE,
+    DEFAULT_TTS_MESSAGES,
 )
 
 if TYPE_CHECKING:
@@ -57,7 +58,7 @@ async def async_send_tts_for_event(
         _LOGGER.warning("Unknown TTS event: %s", event)
         return
 
-    pair = config_manager.get_room_for_climate_entity(climate_entity)
+    pair = config_manager.get_room_for_control_entity(climate_entity)
     if not pair:
         _LOGGER.debug("No room/appliance for %s, skipping TTS", climate_entity)
         return
@@ -92,6 +93,8 @@ async def async_send_tts_for_event(
         "device_name": device_name,
         "device_type": device_type,
         "temp": format_vars.get("temp", ""),
+        "person_name": format_vars.get("person_name", "Someone"),
+        "zone_name": format_vars.get("zone_name", "zone"),
     }
     vars_dict.update(format_vars)
     vars_dict["mode"] = _mode_for_display(str(vars_dict.get("mode", "")))

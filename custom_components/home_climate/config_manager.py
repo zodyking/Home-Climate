@@ -12,6 +12,8 @@ from homeassistant.core import HomeAssistant
 
 from .const import (
     CONFIG_FILE,
+    DEFAULT_COMFORT_TEMP_C,
+    DEFAULT_COMFORT_TOLERANCE_C,
     DEFAULT_CONFIG,
     DEFAULT_COOL_THRESHOLD_C,
     DEFAULT_DRY_HUMIDITY_THRESHOLD_PCT,
@@ -108,6 +110,36 @@ class ConfigManager:
                     return (room, appliance)
         return None
 
+    def get_room_for_switch_entity(self, switch_entity: str) -> tuple[dict, dict] | None:
+        """Return (room, appliance) for a switch entity (simple appliances), or None."""
+        switch_entity = (switch_entity or "").strip()
+        if not switch_entity:
+            return None
+        for room in self.rooms:
+            for appliance in room.get("appliances", []):
+                if appliance.get("is_smart_appliance", True):
+                    continue
+                ps = appliance.get("power_sensor") or {}
+                if (ps.get("switch") or "").strip() == switch_entity:
+                    return (room, appliance)
+        return None
+
+    def get_room_for_control_entity(self, control_entity: str) -> tuple[dict, dict] | None:
+        """Return (room, appliance) for climate or switch entity."""
+        pair = self.get_room_for_climate_entity(control_entity)
+        if pair:
+            return pair
+        return self.get_room_for_switch_entity(control_entity)
+
+    def get_appliance_switch_entity(self, appliance: dict[str, Any]) -> str | None:
+        """Return switch entity for simple appliance, or None."""
+        if appliance.get("is_smart_appliance", True):
+            return None
+        ps = appliance.get("power_sensor") or {}
+        if not ps.get("enabled"):
+            return None
+        return (ps.get("switch") or "").strip() or None
+
     def get_device_name(self, appliance: dict[str, Any]) -> str:
         """Return display name for appliance: custom_name or device_type label."""
         from .const import DEVICE_TYPE_LABELS
@@ -178,8 +210,6 @@ class ConfigManager:
                 auto["exit_duration_sec"] = max(
                     0, min(3600, _safe_int(pres.get("exit_duration_sec"), 300))
                 )
-                tte = pres.get("target_temp_on_enter")
-                auto["target_temp_on_enter"] = _safe_float(tte, 22.0) if tte is not None else 22.0
                 auto["heat_threshold_c"] = _safe_float(
                     old_automation.get("heat_threshold_c"), 18
                 )
@@ -212,6 +242,8 @@ class ConfigManager:
                 "humidity_sensor": (room.get("humidity_sensor") or "").strip() or None,
                 "media_player": (old_tts.get("media_player") or "").strip() or "",
                 "volume": max(0.0, min(1.0, _safe_float(old_tts.get("volume"), 0.7))),
+                "comfort_temp_c": DEFAULT_COMFORT_TEMP_C,
+                "comfort_tolerance_c": DEFAULT_COMFORT_TOLERANCE_C,
                 "tts_overrides": {},
                 "appliances": appliances,
             })
@@ -281,6 +313,9 @@ class ConfigManager:
                 continue
             room_id = room.get("id") or str(uuid.uuid4())
 
+            comfort_temp = max(5, min(40, _safe_float(room.get("comfort_temp_c"), DEFAULT_COMFORT_TEMP_C)))
+            comfort_tolerance = max(0.5, min(2.0, _safe_float(room.get("comfort_tolerance_c"), DEFAULT_COMFORT_TOLERANCE_C)))
+
             validated.append({
                 "id": room_id,
                 "name": str(room.get("name", "")).strip(),
@@ -289,15 +324,18 @@ class ConfigManager:
                 "media_player": str(room.get("media_player", "")).strip() or "",
                 "volume": max(0.0, min(1.0, _safe_float(room.get("volume"), 0.7))),
                 "notify_entity": str(room.get("notify_entity", "")).strip() or "",
+                "comfort_temp_c": comfort_temp,
+                "comfort_tolerance_c": comfort_tolerance,
                 "tts_overrides": dict(room.get("tts_overrides") or {}),
-                "appliances": self._validate_appliances(room.get("appliances") or []),
+                "appliances": self._validate_appliances(room.get("appliances") or [], {"comfort_temp_c": comfort_temp}),
             })
         return validated
 
-    def _validate_appliances(self, appliances: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Validate appliances list."""
+    def _validate_appliances(self, appliances: list[dict[str, Any]], room_context: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        """Validate appliances list. room_context may include comfort_temp_c for validation."""
         validated = []
         default_auto = default_appliance_automation()
+        room_context = room_context or {}
         for app in appliances:
             if not isinstance(app, dict):
                 continue
@@ -305,6 +343,9 @@ class ConfigManager:
             dtype = app.get("device_type") or "minisplit"
             if dtype not in DEVICE_TYPES:
                 dtype = "minisplit"
+            is_smart = app.get("is_smart_appliance", True)
+            if not is_smart and app.get("climate_entity"):
+                is_smart = True
             climate_entity = str(app.get("climate_entity", "")).strip() or None
             auto_raw = app.get("automation") or {}
             auto = {}
@@ -321,9 +362,6 @@ class ConfigManager:
                     auto[k] = max(0, min(100, _safe_float(auto_raw.get(k), DEFAULT_DRY_HUMIDITY_THRESHOLD_PCT)))
                 elif k == "dry_temp_min_c":
                     auto[k] = max(5, min(40, _safe_float(auto_raw.get(k), DEFAULT_DRY_TEMP_MIN_C)))
-                elif k == "target_temp_on_enter":
-                    v = auto_raw.get(k)
-                    auto[k] = _safe_float(v, 22.0) if v is not None else 22.0
                 elif k == "seasonal_mode":
                     auto[k] = auto_raw.get(k) if auto_raw.get(k) in SEASONAL_MODES else default_val
                 elif k in ("outdoor_cool_only_above_c", "outdoor_heat_only_below_c"):
@@ -355,10 +393,23 @@ class ConfigManager:
                     "debounce_sec": max(1, min(60, _safe_int(power_sensor_raw.get("debounce_sec"), DEFAULT_POWER_DEBOUNCE_SEC))),
                 }
 
+            if not is_smart:
+                if climate_entity or not (power_sensor.get("enabled") and power_sensor.get("sensor") and power_sensor.get("switch")):
+                    is_smart = True
+                    climate_entity = climate_entity or str(app.get("climate_entity", "")).strip() or None
+                else:
+                    climate_entity = None
+
+            comfort_temp = room_context.get("comfort_temp_c", DEFAULT_COMFORT_TEMP_C)
+            if auto.get("heat_threshold_c", 0) >= comfort_temp or auto.get("cool_threshold_c", 40) <= comfort_temp:
+                auto["heat_threshold_c"] = min(auto.get("heat_threshold_c", DEFAULT_HEAT_THRESHOLD_C), comfort_temp - 0.5)
+                auto["cool_threshold_c"] = max(auto.get("cool_threshold_c", DEFAULT_COOL_THRESHOLD_C), comfort_temp + 0.5)
+
             validated.append({
                 "id": app_id,
                 "device_type": dtype,
                 "custom_name": str(app.get("custom_name", "")).strip(),
+                "is_smart_appliance": is_smart,
                 "climate_entity": climate_entity,
                 "automation": auto,
                 "power_sensor": power_sensor,
@@ -428,6 +479,16 @@ class ConfigManager:
             "prefix": str(tts.get("prefix", default["prefix"])),
             "messages": messages,
         }
+
+    async def async_update_room_comfort(self, room_id: str, comfort_temp_c: float) -> None:
+        """Update a room's comfort temp (e.g. after struggle auto-adjust) and persist."""
+        for room in self._config.get("rooms", []):
+            if (room.get("id") or "") == room_id:
+                room["comfort_temp_c"] = max(5, min(40, float(comfort_temp_c)))
+                await self.async_save()
+                _LOGGER.info("Updated room %s comfort temp to %.1f", room.get("name", room_id), room["comfort_temp_c"])
+                return
+        _LOGGER.warning("Room %s not found for comfort update", room_id)
 
     async def async_update_config(self, new_config: dict[str, Any]) -> None:
         """Update full configuration with validation."""

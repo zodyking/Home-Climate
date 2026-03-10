@@ -281,14 +281,15 @@ const STYLES = `
     width: 140px;
     height: 140px;
     margin: 0 0 clamp(8px, 2vw, 12px);
+    cursor: pointer;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
   }
   .temp-wheel-svg {
     width: 100%;
     height: 100%;
-    pointer-events: none;
-  }
-  .temp-wheel-wrap {
-    cursor: pointer;
+    display: block;
   }
   .temp-wheel-track {
     fill: none;
@@ -637,7 +638,7 @@ class HomeWeatherPanel extends HTMLElement {
       const newApps = r.appliances || [];
       const prevApps = pr.appliances || [];
       if (newApps.length !== prevApps.length) return false;
-      return newApps.every((a, j) => (prevApps[j]?.climate_entity || "") === (a.climate_entity || ""));
+      return newApps.every((a, j) => (prevApps[j]?.control_entity || prevApps[j]?.climate_entity || "") === (a.control_entity || a.climate_entity || ""));
     });
     if (!structureMatch) return false;
 
@@ -652,7 +653,7 @@ class HomeWeatherPanel extends HTMLElement {
       }
 
       for (const app of room.appliances || []) {
-        const entity = app.climate_entity || "";
+        const entity = app.control_entity || app.climate_entity || "";
         const appCard = Array.from(roomCard.querySelectorAll(".appliance-subcard")).find((el) => (el.dataset.entity || "") === entity);
         if (!appCard) continue;
 
@@ -867,6 +868,7 @@ class HomeWeatherPanel extends HTMLElement {
           id: crypto.randomUUID(),
           device_type: "minisplit",
           custom_name: "",
+          is_smart_appliance: true,
           climate_entity: "",
           automation: {
             person_on: "",
@@ -875,7 +877,6 @@ class HomeWeatherPanel extends HTMLElement {
             zone_off: "",
             enter_duration_sec: 30,
             exit_duration_sec: 300,
-            target_temp_on_enter: this._fToC(72),
             heat_automation_enabled: true,
             heat_threshold_c: this._fToC(64),
             cool_automation_enabled: true,
@@ -1063,17 +1064,19 @@ class HomeWeatherPanel extends HTMLElement {
     };
     const rawState = (appliance.climate_state || appliance.climate_mode || "off").toLowerCase();
     const isOn = !["off", "unknown", "unavailable"].includes(rawState);
-    const entity = this._escapeHtml(appliance.climate_entity || "");
+    const controlEntity = appliance.control_entity || appliance.climate_entity || "";
+    const entity = this._escapeHtml(controlEntity);
     const roomName = this._escapeHtml(room.name || "Room");
+    const isSmart = appliance.is_smart_appliance !== false;
     return `
-      <div class="appliance-subcard" data-entity="${entity}" data-room-name="${roomName}">
+      <div class="appliance-subcard" data-entity="${entity}" data-room-name="${roomName}" data-is-smart="${isSmart}">
         <div class="onoff-toggle-wrap">
           <button class="onoff-toggle ${isOn ? "on" : ""}" data-action="onoff" data-entity="${entity}" data-room-name="${roomName}" data-is-on="${isOn}" aria-label="${isOn ? "Turn off" : "Turn on"}">
             <img class="toggle-icon" src="/home_climate_panel/icons/${isOn ? "power-on" : "power-off"}.png" alt="">
           </button>
         </div>
         <h4 class="device-name">${this._escapeHtml(appliance.device_name || "Appliance")}</h4>
-        ${this._renderRoomCard(app, true)}
+        ${this._renderRoomCard(app, true, isSmart)}
       </div>
     `;
   }
@@ -1134,8 +1137,9 @@ class HomeWeatherPanel extends HTMLElement {
 
     const ttsRoomName = room._roomNameForTts || room.name || "Room";
     const disabledClass = isFanOnly ? " temp-wheel-disabled" : "";
+    const controlEntity = room.control_entity || room.climate_entity || "";
     return `
-      <div class="temp-wheel-wrap${disabledClass}" data-entity="${this._escapeHtml(room.climate_entity || "")}" data-room-name="${this._escapeHtml(ttsRoomName)}" data-hvac-mode="${this._escapeHtml(mode)}" data-min="${minT}" data-max="${maxT}" data-target="${target}" data-unit="${this._escapeHtml(unit)}" data-disabled="${isFanOnly}">
+      <div class="temp-wheel-wrap${disabledClass}" data-entity="${this._escapeHtml(controlEntity)}" data-room-name="${this._escapeHtml(ttsRoomName)}" data-hvac-mode="${this._escapeHtml(mode)}" data-min="${minT}" data-max="${maxT}" data-target="${target}" data-unit="${this._escapeHtml(unit)}" data-disabled="${isFanOnly}">
         <svg class="temp-wheel-svg" viewBox="0 0 100 100" aria-hidden="true">
           <circle class="temp-wheel-track" cx="50" cy="50" r="${r}" />
           <circle class="temp-wheel-fill" cx="50" cy="50" r="${r}" stroke-dasharray="${dashLen} 500" stroke-dashoffset="${-dashOffset}" />
@@ -1150,13 +1154,15 @@ class HomeWeatherPanel extends HTMLElement {
     `;
   }
 
-  _renderRoomCard(room, asSubCard = false) {
+  _renderRoomCard(room, asSubCard = false, isSmart = true) {
     const temp = room.temp != null ? room.temp.toFixed(1) : "—";
     const humidity = room.humidity != null ? room.humidity.toFixed(0) : "—";
     const mode = (room.climate_mode || room.climate_state || "off").toLowerCase();
     const hvacAction = room.hvac_action || null;
     const fanMode = room.fan_mode || null;
-    const hasClimate = !!(room.climate_entity && !room.is_monitor_only);
+    const controlEntity = room.control_entity || room.climate_entity;
+    const hasClimate = !!(controlEntity && !room.is_monitor_only);
+    const hasSmartClimate = hasClimate && isSmart;
     const roomName = (asSubCard && room._roomNameForTts) ? room._roomNameForTts : (room.name || "Room");
     const unit = DISPLAY_UNIT;
     const minT = room.min_temp ?? 16;
@@ -1176,11 +1182,14 @@ class HomeWeatherPanel extends HTMLElement {
     const modesForRow = asSubCard ? this._allowedModes(room.hvac_modes, true) : this._allowedModes(room.hvac_modes);
 
     const content = `
-      ${hasClimate ? this._renderTempWheel(room) : ""}
-      ${hasClimate ? `
+      ${hasSmartClimate ? this._renderTempWheel(room) : ""}
+      ${!hasClimate && controlEntity ? `
+        <div class="simple-appliance-temp" style="font-size:clamp(24px,4vw,30px);font-weight:600;margin:8px 0;">Room − ${temp}${DISPLAY_UNIT}</div>
+      ` : ""}
+      ${hasSmartClimate ? `
         <div class="temp-buttons ${mode === "fan_only" ? "temp-buttons-hidden" : ""}" data-fan-only="${mode === "fan_only"}">
-          <button class="temp-btn" data-action="temp-down" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}" data-hvac-mode="${this._escapeHtml(mode)}" data-min="${minT}" data-max="${maxT}" data-target="${currentTarget}">−</button>
-          <button class="temp-btn" data-action="temp-up" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}" data-hvac-mode="${this._escapeHtml(mode)}" data-min="${minT}" data-max="${maxT}" data-target="${currentTarget}">+</button>
+          <button class="temp-btn" data-action="temp-down" data-entity="${this._escapeHtml(controlEntity)}" data-room-name="${this._escapeHtml(roomName)}" data-hvac-mode="${this._escapeHtml(mode)}" data-min="${minT}" data-max="${maxT}" data-target="${currentTarget}">−</button>
+          <button class="temp-btn" data-action="temp-up" data-entity="${this._escapeHtml(controlEntity)}" data-room-name="${this._escapeHtml(roomName)}" data-hvac-mode="${this._escapeHtml(mode)}" data-min="${minT}" data-max="${maxT}" data-target="${currentTarget}">+</button>
         </div>
       ` : ""}
       ${!asSubCard ? `
@@ -1204,12 +1213,12 @@ class HomeWeatherPanel extends HTMLElement {
       <div class="room-state-row">
         ${room.is_monitor_only ? `<span class="state-badge">Monitor</span>` : ""}
         ${!room.is_monitor_only && hvacAction ? `<span class="state-badge state-action">${this._hvacActionLabel(hvacAction)}</span>` : ""}
-        ${!room.is_monitor_only && fanModes.length > 0 ? `<button type="button" class="fan-badge-btn state-badge state-fan" data-action="fan-popover" data-entity="${this._escapeHtml(room.climate_entity)}" data-fan-mode="${this._escapeHtml(fanMode || "")}" data-fan-modes="${this._escapeHtml(fanModes.join(","))}" data-room-name="${this._escapeHtml(roomName)}">Fan: ${this._escapeHtml(fanMode || "—")}</button>` : ""}
+        ${!room.is_monitor_only && hasSmartClimate && fanModes.length > 0 ? `<button type="button" class="fan-badge-btn state-badge state-fan" data-action="fan-popover" data-entity="${this._escapeHtml(controlEntity)}" data-fan-mode="${this._escapeHtml(fanMode || "")}" data-fan-modes="${this._escapeHtml(fanModes.join(","))}" data-room-name="${this._escapeHtml(roomName)}">Fan: ${this._escapeHtml(fanMode || "—")}</button>` : ""}
       </div>
-      ${hasClimate ? `
+      ${hasSmartClimate ? `
         <div class="room-controls">
           ${modesForRow.map((m) => `
-            <button class="ctrl-btn ${mode === m ? "active" : ""}" title="${this._escapeHtml(this._modeLabel(m))}" aria-label="${this._escapeHtml(this._modeLabel(m))}" data-action="mode" data-hvac-mode="${m}" data-entity="${this._escapeHtml(room.climate_entity)}" data-room-name="${this._escapeHtml(roomName)}">${modeIcons[m] || offIcon}</button>
+            <button class="ctrl-btn ${mode === m ? "active" : ""}" title="${this._escapeHtml(this._modeLabel(m))}" aria-label="${this._escapeHtml(this._modeLabel(m))}" data-action="mode" data-hvac-mode="${m}" data-entity="${this._escapeHtml(controlEntity)}" data-room-name="${this._escapeHtml(roomName)}">${modeIcons[m] || offIcon}</button>
           `).join("")}
         </div>
       ` : ""}
@@ -1369,6 +1378,7 @@ class HomeWeatherPanel extends HTMLElement {
       const fillCircle = wrap.querySelector(".temp-wheel-fill");
       const knob = wrap.querySelector("[data-wheel-knob]");
       const targetEl = wrap.querySelector(".temp-wheel-target");
+      const svg = wrap.querySelector(".temp-wheel-svg");
       const r = 45;
       const circum = 2 * Math.PI * r;
       const arcLen = circum * 0.75;
@@ -1378,8 +1388,10 @@ class HomeWeatherPanel extends HTMLElement {
         const rect = wrap.getBoundingClientRect();
         const cx = rect.left + rect.width / 2;
         const cy = rect.top + rect.height / 2;
-        const x = (e.clientX || e.touches?.[0]?.clientX) - cx;
-        const y = (e.clientY || e.touches?.[0]?.clientY) - cy;
+        const clientX = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
+        const clientY = e.clientY ?? e.touches?.[0]?.clientY ?? 0;
+        const x = clientX - cx;
+        const y = clientY - cy;
         const angleDeg = (Math.atan2(y, x) * 180) / Math.PI;
         return Math.max(0, Math.min(1, (angleDeg + 135) / 270));
       };
@@ -1420,22 +1432,25 @@ class HomeWeatherPanel extends HTMLElement {
           lastNorm = getNormFromEvent(ev);
           updateDOM(lastNorm);
         };
+        const touchMoveOpts = { capture: true, passive: false };
+        const touchEndOpts = { capture: true };
         const onUp = () => {
           document.removeEventListener("mousemove", onMove);
           document.removeEventListener("mouseup", onUp);
-          document.removeEventListener("touchmove", onMove, { passive: false });
-          document.removeEventListener("touchend", onUp);
+          document.removeEventListener("touchmove", onMove, touchMoveOpts);
+          document.removeEventListener("touchend", onUp, touchEndOpts);
           this._draggingWheelEntity = null;
           handleSetTemp(lastNorm);
         };
         document.addEventListener("mousemove", onMove);
         document.addEventListener("mouseup", onUp);
-        document.addEventListener("touchmove", onMove, { passive: false });
-        document.addEventListener("touchend", onUp);
+        document.addEventListener("touchmove", onMove, touchMoveOpts);
+        document.addEventListener("touchend", onUp, touchEndOpts);
       };
 
-      wrap.addEventListener("mousedown", onDown);
-      wrap.addEventListener("touchstart", onDown, { passive: false });
+      const target = svg || wrap;
+      target.addEventListener("mousedown", onDown);
+      target.addEventListener("touchstart", onDown, { passive: false });
     });
   }
 
@@ -1551,11 +1566,13 @@ class HomeWeatherPanel extends HTMLElement {
     return {
       manual_on: "Manual turn on",
       manual_off: "Manual turn off",
-      mode_change: "Mode change",
+      mode_change: "Mode change (manual)",
       temp_change: "Temperature change",
-      presence_enter: "Presence enter zone",
-      presence_leave: "Presence leave zone",
+      presence_enter: "Zone entry – turning on",
+      presence_leave: "Zone exit – turning off",
       fan_change: "Fan speed change",
+      auto_mode_change: "Automation mode change",
+      comfort_adjusted: "Comfort temp adjusted (struggle)",
     };
   }
 
@@ -1614,7 +1631,7 @@ class HomeWeatherPanel extends HTMLElement {
       .tts-toggle { min-width: 50px; }
     `;
 
-    const ttsEventKeys = ["manual_on", "manual_off", "mode_change", "temp_change", "presence_enter", "presence_leave", "fan_change"];
+    const ttsEventKeys = ["manual_on", "manual_off", "mode_change", "temp_change", "presence_enter", "presence_leave", "fan_change", "auto_mode_change", "comfort_adjusted"];
     const labels = this._ttsEventLabels();
 
     return `
@@ -1702,14 +1719,14 @@ class HomeWeatherPanel extends HTMLElement {
             </div>
             <div class="settings-section-divider"></div>
             <div class="settings-section">
-              <h4 class="settings-section-title">Event messages</h4>
-              <p class="form-label" style="margin-bottom:8px;">Variables: {prefix}, {room_name}, {device_name}, {device_type}, {mode}, {temp}, {fan_mode}</p>
+              <h4 class="settings-section-title">Event messages (prefix in title only, not in message)</h4>
+              <p class="form-label" style="margin-bottom:8px;">Variables: {room_name}, {device_name}, {device_type}, {mode}, {temp}, {fan_mode}, {person_name}, {zone_name}</p>
               ${ttsEventKeys.map((key) => {
                 const entry = (this._config?.notification_settings?.messages || {})[key] || { enabled: true, template: "" };
                 return `
                 <div class="tts-event-row notif-event-row" data-notif-key="${key}">
-                  <label class="form-label" style="min-width:120px;">${labels[key] || key}</label>
-                  <input type="text" class="form-input" data-field="template" value="${this._escapeHtml(entry.template || "")}" placeholder="e.g. {prefix} {room_name} {device_name} turned on">
+                  <label class="form-label" style="min-width:180px;">${labels[key] || key}</label>
+                  <input type="text" class="form-input" data-field="template" value="${this._escapeHtml(entry.template || "")}" placeholder="e.g. {room_name} {device_name} turned on">
                   <label class="form-label" style="margin:0;">Enable</label>
                   <input type="checkbox" class="tts-toggle" data-field="enabled" ${entry.enabled !== false ? "checked" : ""}>
                 </div>`;
@@ -1754,6 +1771,14 @@ class HomeWeatherPanel extends HTMLElement {
           <div class="form-group">
             <label class="form-label">Room name</label>
             <input type="text" class="form-input" data-field="name" value="${this._escapeHtml(room.name || "")}" placeholder="e.g. Bedroom">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Comfort temp (°F) – target for heating/cooling</label>
+            <input type="number" class="form-input" data-field="comfort_temp_c" value="${this._cToF(room.comfort_temp_c ?? this._fToC(72))}" step="0.5" data-celsius>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Comfort tolerance (°F) – at/near = comfort ± this (0.5–2°C)</label>
+            <input type="number" class="form-input" data-field="comfort_tolerance_c" value="${((room.comfort_tolerance_c ?? 1) * 9/5).toFixed(1)}" step="0.1" min="0.9" max="3.6" data-celsius-delta>
           </div>
           <div class="form-group">
             <label class="form-label">Temp sensor</label>
@@ -1824,9 +1849,17 @@ class HomeWeatherPanel extends HTMLElement {
           <input type="text" class="form-input" data-field="custom_name" value="${this._escapeHtml(app.custom_name || "")}" placeholder="e.g. Samsung Minisplit">
         </div>
         <div class="form-group">
+          <label class="form-label" style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" data-field="is_smart_appliance" ${app.is_smart_appliance !== false ? "checked" : ""}>
+            Smart appliance (climate entity) – uncheck for simple on/off switch
+          </label>
+        </div>
+        ${(app.is_smart_appliance !== false) ? `
+        <div class="form-group">
           <label class="form-label">Climate entity</label>
           ${this._renderEntityAutocomplete(app.climate_entity || "", "climate", "climate_entity", "e.g. climate.minisplit")}
         </div>
+        ` : ""}
         <div class="settings-section-divider"></div>
         <div class="settings-section">
           <h4 class="settings-section-title">Turn on (enter zone)</h4>
@@ -1841,10 +1874,6 @@ class HomeWeatherPanel extends HTMLElement {
           <div class="form-group">
             <label class="form-label">Enter duration (sec)</label>
             <input type="number" class="form-input" data-field="enter_duration_sec" value="${auto.enter_duration_sec ?? 30}" min="0">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Target temp on enter (°F)</label>
-            <input type="number" class="form-input" data-field="target_temp_on_enter" value="${this._cToF(auto.target_temp_on_enter ?? this._fToC(72))}" step="0.5">
           </div>
         </div>
         <div class="settings-section-divider"></div>
@@ -1881,6 +1910,7 @@ class HomeWeatherPanel extends HTMLElement {
           </label>
           <input type="number" class="form-input" data-field="cool_threshold_c" value="${this._cToF(auto.cool_threshold_c ?? this._fToC(79))}" step="0.5">
         </div>
+        ${(app.is_smart_appliance !== false) ? `
         <div class="form-group">
           <label class="form-label" style="display:flex;align-items:center;gap:8px;">
             <input type="checkbox" data-field="dry_automation_enabled" ${auto.dry_automation_enabled ? "checked" : ""}>
@@ -1892,16 +1922,19 @@ class HomeWeatherPanel extends HTMLElement {
           <label class="form-label">No dehumidifier when temp below (°F)</label>
           <input type="number" class="form-input" data-field="dry_temp_min_c" value="${this._cToF(auto.dry_temp_min_c ?? this._fToC(64))}" step="0.5">
         </div>
+        ` : ""}
         </div>
         <div class="settings-section-divider"></div>
         <div class="settings-section">
-          <h4 class="settings-section-title">Power sensor (optional override for on/off)</h4>
+          <h4 class="settings-section-title">Power sensor (${app.is_smart_appliance !== false ? "optional override for on/off" : "required for simple appliance"})</h4>
+          ${(app.is_smart_appliance !== false) ? `
           <div class="form-group">
             <label class="form-label" style="display:flex;align-items:center;gap:8px;">
               <input type="checkbox" data-field="power_sensor_enabled" ${(app.power_sensor || {}).enabled ? "checked" : ""}>
               Enable power sensor override
             </label>
           </div>
+          ` : ""}
           <div class="form-group">
             <label class="form-label">Power sensor</label>
             ${this._renderEntityAutocomplete((app.power_sensor || {}).sensor || "", "sensor_switch", "power_sensor_sensor", "e.g. sensor.power_consumption")}
@@ -1954,7 +1987,8 @@ class HomeWeatherPanel extends HTMLElement {
         const zoneOffEl = acard.querySelector("[data-field='zone_off']");
         const enterEl = acard.querySelector("[data-field='enter_duration_sec']");
         const exitEl = acard.querySelector("[data-field='exit_duration_sec']");
-        const targetTempEl = acard.querySelector("[data-field='target_temp_on_enter']");
+        const isSmartEl = acard.querySelector("[data-field='is_smart_appliance']");
+        const isSmart = isSmartEl?.checked !== false;
         const heatEnabledEl = acard.querySelector("[data-field='heat_automation_enabled']");
         const heatEl = acard.querySelector("[data-field='heat_threshold_c']");
         const coolEnabledEl = acard.querySelector("[data-field='cool_automation_enabled']");
@@ -1972,22 +2006,20 @@ class HomeWeatherPanel extends HTMLElement {
         const existingApps = existingRoom?.appliances || [];
         const existingApp = existingApps[appliances.length];
 
-        const powerSensorEnabled = powerSensorEnabledEl?.checked === true;
-        const powerSensor = powerSensorEnabled
-          ? {
-              enabled: true,
-              sensor: (powerSensorEl?.value || "").trim(),
-              switch: (powerSwitchEl?.value || "").trim(),
-              power_threshold_w: parseFloat(powerThresholdEl?.value) || 10,
-              debounce_sec: Math.max(1, Math.min(60, parseInt(powerDebounceEl?.value, 10) || 5)),
-            }
-          : {};
-
+        const powerSensorConfig = {
+          enabled: true,
+          sensor: (powerSensorEl?.value || "").trim(),
+          switch: (powerSwitchEl?.value || "").trim(),
+          power_threshold_w: parseFloat(powerThresholdEl?.value) || 10,
+          debounce_sec: Math.max(1, Math.min(60, parseInt(powerDebounceEl?.value, 10) || 5)),
+        };
+        const powerSensor = (!isSmart || powerSensorEnabledEl?.checked === true) ? powerSensorConfig : {};
         appliances.push({
           id: existingApp?.id || crypto.randomUUID(),
           device_type: deviceTypeEl?.value || "minisplit",
           custom_name: (customNameEl?.value || "").trim(),
-          climate_entity: (climateEl?.value || "").trim() || null,
+          is_smart_appliance: isSmart,
+          climate_entity: isSmart ? ((climateEl?.value || "").trim() || null) : null,
           automation: {
             person_on: (personOnEl?.value || "").trim(),
             zone_on: (zoneOnEl?.value || "").trim(),
@@ -1995,7 +2027,6 @@ class HomeWeatherPanel extends HTMLElement {
             zone_off: (zoneOffEl?.value || "").trim(),
             enter_duration_sec: parseInt(enterEl?.value, 10) || 30,
             exit_duration_sec: parseInt(exitEl?.value, 10) || 300,
-            target_temp_on_enter: this._fToC(parseFloat(targetTempEl?.value)) || 22,
             heat_automation_enabled: heatEnabledEl?.checked !== false,
             heat_threshold_c: this._fToC(parseFloat(heatEl?.value)) || 18,
             cool_automation_enabled: coolEnabledEl?.checked !== false,
@@ -2012,6 +2043,12 @@ class HomeWeatherPanel extends HTMLElement {
         });
       });
 
+      const comfortTempEl = row.querySelector("[data-field='comfort_temp_c']");
+      const comfortToleranceEl = row.querySelector("[data-field='comfort_tolerance_c']");
+      const comfortTempC = comfortTempEl ? this._fToC(parseFloat(comfortTempEl.value)) : 22;
+      const comfortToleranceF = comfortToleranceEl ? parseFloat(comfortToleranceEl.value) : 1.8;
+      const comfortToleranceC = Math.max(0.5, Math.min(2, (comfortToleranceF || 1.8) / 1.8));
+
       config.rooms.push({
         id: roomId,
         name,
@@ -2020,6 +2057,8 @@ class HomeWeatherPanel extends HTMLElement {
         media_player: (mediaEl?.value || "").trim() || "",
         volume: parseFloat(volumeEl?.value) || 0.7,
         notify_entity: (notifyEl?.value || "").trim() || "",
+        comfort_temp_c: comfortTempC,
+        comfort_tolerance_c: comfortToleranceC,
         tts_overrides: {},
         appliances,
       });
@@ -2037,7 +2076,7 @@ class HomeWeatherPanel extends HTMLElement {
       messages: {},
     };
 
-    const ttsEventKeys = ["manual_on", "manual_off", "mode_change", "temp_change", "presence_enter", "presence_leave", "fan_change"];
+    const ttsEventKeys = ["manual_on", "manual_off", "mode_change", "temp_change", "presence_enter", "presence_leave", "fan_change", "auto_mode_change", "comfort_adjusted"];
     ttsEventKeys.forEach((key) => {
       const row = root.querySelector(`[data-tts-key="${key}"]`);
       const templateEl = row?.querySelector("[data-field='template']");
@@ -2085,4 +2124,6 @@ class HomeWeatherPanel extends HTMLElement {
   }
 }
 
-customElements.define("home-climate-panel", HomeWeatherPanel);
+if (!customElements.get("home-climate-panel")) {
+  customElements.define("home-climate-panel", HomeWeatherPanel);
+}

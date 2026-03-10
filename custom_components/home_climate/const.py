@@ -28,6 +28,8 @@ TTS_TEMP_CHANGE = "temp_change"
 TTS_PRESENCE_ENTER = "presence_enter"
 TTS_PRESENCE_LEAVE = "presence_leave"
 TTS_FAN_CHANGE = "fan_change"
+TTS_AUTO_MODE_CHANGE = "auto_mode_change"
+TTS_COMFORT_ADJUSTED = "comfort_adjusted"
 
 TTS_EVENT_KEYS = [
     TTS_MANUAL_ON,
@@ -37,17 +39,21 @@ TTS_EVENT_KEYS = [
     TTS_PRESENCE_ENTER,
     TTS_PRESENCE_LEAVE,
     TTS_FAN_CHANGE,
+    TTS_AUTO_MODE_CHANGE,
+    TTS_COMFORT_ADJUSTED,
 ]
 
-# Default templates per event
+# Default templates per event (TTS uses prefix in message)
 DEFAULT_TTS_MESSAGES = {
     TTS_MANUAL_ON: "{prefix} {room_name} {device_name} turned on",
     TTS_MANUAL_OFF: "{prefix} {room_name} {device_name} turned off",
     TTS_MODE_CHANGE: "{prefix} {room_name} {device_name} set to {mode}",
     TTS_TEMP_CHANGE: "{prefix} {room_name} {device_name} temperature set to {temp}",
-    TTS_PRESENCE_ENTER: "{prefix} {room_name} {device_name} turned on",
-    TTS_PRESENCE_LEAVE: "{prefix} {room_name} {device_name} turned off",
+    TTS_PRESENCE_ENTER: "{prefix} {person_name} entered {zone_name}, turning on {device_name}",
+    TTS_PRESENCE_LEAVE: "{prefix} {person_name} left {zone_name}, turning off {device_name}",
     TTS_FAN_CHANGE: "{prefix} {room_name} {device_name} fan set to {fan_mode}",
+    TTS_AUTO_MODE_CHANGE: "{prefix} {room_name} {device_name} set to {mode} by automation",
+    TTS_COMFORT_ADJUSTED: "{prefix} {room_name} {device_name} could not reach comfort temp; target adjusted to {temp}",
 }
 
 # Device types for appliances
@@ -60,8 +66,14 @@ DEVICE_TYPE_LABELS = {
 }
 
 # Climate monitor settings
-CLIMATE_CHECK_INTERVAL = 30  # seconds between climate logic checks
+CLIMATE_CHECK_INTERVAL = 30  # seconds between threshold checks
+CLIMATE_SET_TEMP_INTERVAL = 180  # seconds between dynamic set temp updates (3 min)
+STRUGGLE_HOUR_SEC = 3600  # min time before declaring appliance cannot reach comfort
 PRESENCE_CHECK_INTERVAL = 5  # seconds for presence state polling
+
+# Default room comfort (Celsius)
+DEFAULT_COMFORT_TEMP_C = 22.0
+DEFAULT_COMFORT_TOLERANCE_C = 1.0  # deadband: at/near = comfort ± tolerance (0.5-2)
 
 # Default automation thresholds (Celsius)
 DEFAULT_HEAT_THRESHOLD_C = 18
@@ -111,7 +123,6 @@ def default_appliance_automation() -> dict:
         "zone_off": "",
         "enter_duration_sec": DEFAULT_ENTER_DURATION_SEC,
         "exit_duration_sec": DEFAULT_EXIT_DURATION_SEC,
-        "target_temp_on_enter": 22.0,
         "heat_threshold_c": DEFAULT_HEAT_THRESHOLD_C,
         "cool_threshold_c": DEFAULT_COOL_THRESHOLD_C,
         "heat_automation_enabled": True,
@@ -128,10 +139,21 @@ def default_appliance_automation() -> dict:
     }
 
 
-# Notification settings (mirror TTS)
+# Notification settings (prefix in title only, not in message body)
 DEFAULT_NOTIFICATION_PREFIX = "Home Climate"
-NOTIFICATION_EVENT_KEYS = list(TTS_EVENT_KEYS)  # Same events as TTS
-DEFAULT_NOTIFICATION_MESSAGES = dict(DEFAULT_TTS_MESSAGES)
+NOTIFICATION_EVENT_KEYS = list(TTS_EVENT_KEYS)
+# No {prefix} in message - prefix goes to title only
+DEFAULT_NOTIFICATION_MESSAGES = {
+    TTS_MANUAL_ON: "{room_name} {device_name} turned on",
+    TTS_MANUAL_OFF: "{room_name} {device_name} turned off",
+    TTS_MODE_CHANGE: "{room_name} {device_name} set to {mode}",
+    TTS_TEMP_CHANGE: "{room_name} {device_name} temperature set to {temp}",
+    TTS_PRESENCE_ENTER: "{person_name} entered {zone_name}, turning on {device_name}",
+    TTS_PRESENCE_LEAVE: "{person_name} left {zone_name}, turning off {device_name}",
+    TTS_FAN_CHANGE: "{room_name} {device_name} fan set to {fan_mode}",
+    TTS_AUTO_MODE_CHANGE: "{room_name} {device_name} set to {mode} by automation",
+    TTS_COMFORT_ADJUSTED: "{room_name} {device_name} could not reach comfort temp; target adjusted to {temp}",
+}
 
 
 def _default_notification_messages() -> dict:

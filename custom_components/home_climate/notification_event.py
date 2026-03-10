@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.core import HomeAssistant
 
 from .const import (
-    TTS_EVENT_KEYS,
+    NOTIFICATION_EVENT_KEYS,
     TTS_MANUAL_ON,
     TTS_MANUAL_OFF,
     TTS_MODE_CHANGE,
@@ -15,7 +15,7 @@ from .const import (
     TTS_PRESENCE_ENTER,
     TTS_PRESENCE_LEAVE,
     TTS_FAN_CHANGE,
-    DEFAULT_TTS_MESSAGES,
+    DEFAULT_NOTIFICATION_MESSAGES,
 )
 
 if TYPE_CHECKING:
@@ -54,11 +54,11 @@ async def async_send_notification_for_event(
     Resolves room and recipients, picks template from notification_settings,
     checks enabled, formats and sends to each room recipient's notify entity.
     """
-    if event not in TTS_EVENT_KEYS:
+    if event not in NOTIFICATION_EVENT_KEYS:
         _LOGGER.warning("Unknown notification event: %s", event)
         return
 
-    pair = config_manager.get_room_for_climate_entity(climate_entity)
+    pair = config_manager.get_room_for_control_entity(climate_entity)
     if not pair:
         _LOGGER.debug(
             "No room/appliance for %s, skipping notification", climate_entity
@@ -87,7 +87,7 @@ async def async_send_notification_for_event(
 
     template = msg_entry.get("template", "")
     if not template:
-        template = DEFAULT_TTS_MESSAGES.get(event, "")
+        template = DEFAULT_NOTIFICATION_MESSAGES.get(event, "")
     if not template:
         return
 
@@ -97,18 +97,20 @@ async def async_send_notification_for_event(
     prefix = notif_settings.get("prefix", "Home Climate")
 
     vars_dict = {
-        "prefix": prefix,
+        "prefix": "",  # Not in message body; prefix goes to title only
         "room_name": room_name,
         "device_name": device_name,
         "device_type": device_type,
         "temp": format_vars.get("temp", ""),
+        "person_name": format_vars.get("person_name", "Someone"),
+        "zone_name": format_vars.get("zone_name", "zone"),
     }
     vars_dict.update(format_vars)
     vars_dict["mode"] = _mode_for_display(str(vars_dict.get("mode", "")))
     vars_dict["fan_mode"] = _format_for_speech(str(vars_dict.get("fan_mode", "")))
 
     try:
-        message = template.format(**vars_dict)
+        message = " ".join(template.format(**vars_dict).split())
     except KeyError as e:
         _LOGGER.warning(
             "Notification template missing variable %s: %s", e, template

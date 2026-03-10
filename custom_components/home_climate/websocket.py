@@ -378,36 +378,61 @@ async def websocket_get_dashboard_data(
         appliances_data = []
 
         for appliance in appliances:
+            is_smart = appliance.get("is_smart_appliance", True)
             climate_entity = (appliance.get("climate_entity") or "").strip()
-            climate_data = (
-                _get_climate_state(hass, climate_entity, config_manager, appliance)
-                if climate_entity
-                else {}
-            )
-            climate_current_temp = climate_data.get("current_temperature")
-            if climate_current_temp is not None:
-                try:
-                    climate_current_temp = float(climate_current_temp)
-                except (ValueError, TypeError):
-                    climate_current_temp = None
-            use_temp = temp if temp is not None else climate_current_temp
+            switch_entity = config_manager.get_appliance_switch_entity(appliance)
+            control_entity = climate_entity if (is_smart and climate_entity) else (switch_entity or "")
 
-            appliances_data.append({
-                "appliance_id": appliance.get("id"),
-                "device_type": appliance.get("device_type", "minisplit"),
-                "device_name": config_manager.get_device_name(appliance),
-                "climate_entity": climate_entity or None,
-                "temp": use_temp,
-                "target_temp": climate_data.get("target_temp"),
-                "hvac_action": climate_data.get("hvac_action"),
-                "fan_mode": climate_data.get("fan_mode"),
-                "climate_mode": climate_data.get("climate_mode"),
-                "climate_state": climate_data.get("climate_state"),
-                "min_temp": climate_data.get("min_temp", 16),
-                "max_temp": climate_data.get("max_temp", 30),
-                "hvac_modes": climate_data.get("hvac_modes", []),
-                "fan_modes": climate_data.get("fan_modes", []),
-            })
+            if is_smart and climate_entity:
+                climate_data = _get_climate_state(hass, climate_entity, config_manager, appliance)
+                climate_current_temp = climate_data.get("current_temperature")
+                if climate_current_temp is not None:
+                    try:
+                        climate_current_temp = float(climate_current_temp)
+                    except (ValueError, TypeError):
+                        climate_current_temp = None
+                use_temp = temp if temp is not None else climate_current_temp
+                appliances_data.append({
+                    "appliance_id": appliance.get("id"),
+                    "device_type": appliance.get("device_type", "minisplit"),
+                    "device_name": config_manager.get_device_name(appliance),
+                    "is_smart_appliance": True,
+                    "climate_entity": climate_entity,
+                    "control_entity": climate_entity,
+                    "temp": use_temp,
+                    "target_temp": climate_data.get("target_temp"),
+                    "hvac_action": climate_data.get("hvac_action"),
+                    "fan_mode": climate_data.get("fan_mode"),
+                    "climate_mode": climate_data.get("climate_mode"),
+                    "climate_state": climate_data.get("climate_state"),
+                    "min_temp": climate_data.get("min_temp", 16),
+                    "max_temp": climate_data.get("max_temp", 30),
+                    "hvac_modes": climate_data.get("hvac_modes", []),
+                    "fan_modes": climate_data.get("fan_modes", []),
+                })
+            elif switch_entity:
+                from .power_detector import get_appliance_power_state
+                power_state = get_appliance_power_state(hass, config_manager, switch_entity)
+                switch_state = hass.states.get(switch_entity)
+                is_on = (power_state == "on") if power_state is not None else (switch_state and switch_state.state == "on")
+                appliances_data.append({
+                    "appliance_id": appliance.get("id"),
+                    "device_type": appliance.get("device_type", "minisplit"),
+                    "device_name": config_manager.get_device_name(appliance),
+                    "is_smart_appliance": False,
+                    "climate_entity": None,
+                    "control_entity": switch_entity,
+                    "temp": temp,
+                    "target_temp": None,
+                    "hvac_action": None,
+                    "fan_mode": None,
+                    "climate_mode": "on" if is_on else "off",
+                    "climate_state": "on" if is_on else "off",
+                    "min_temp": 16,
+                    "max_temp": 30,
+                    "hvac_modes": ["on", "off"],
+                    "fan_modes": [],
+                })
 
         rooms_data.append({
             "id": room.get("id"),
@@ -460,48 +485,57 @@ async def websocket_set_climate_and_announce(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Set climate mode and optionally announce via TTS."""
+    """Set climate mode or switch on/off, optionally announce via TTS."""
     entity_id = msg["entity_id"]
     service = msg["service"]
     hvac_mode = msg.get("hvac_mode") or "off"
 
     config_manager = hass.data.get(DOMAIN, {}).get("config_manager")
+    pair = config_manager.get_room_for_control_entity(entity_id) if config_manager else None
+    is_simple = pair and not (pair[1].get("is_smart_appliance", True))
     power_switch = None
     if config_manager:
         from .power_detector import get_appliance_power_switch
         power_switch = get_appliance_power_switch(config_manager, entity_id)
 
     try:
-        if service == "turn_off":
-            if power_switch:
+        if is_simple:
+            if service == "turn_off":
+                await hass.services.async_call(
+                    "switch", "turn_off", {ATTR_ENTITY_ID: entity_id}, blocking=True,
+                )
+                tts_event = TTS_MANUAL_OFF
+            elif service == "turn_on":
+                await hass.services.async_call(
+                    "switch", "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=True,
+                )
+                tts_event = TTS_MANUAL_ON
+            else:
+                tts_event = TTS_MANUAL_OFF if hvac_mode.lower() == "off" else TTS_MANUAL_ON
                 await hass.services.async_call(
                     "switch",
-                    "turn_off",
-                    {ATTR_ENTITY_ID: power_switch},
+                    "turn_off" if hvac_mode.lower() == "off" else "turn_on",
+                    {ATTR_ENTITY_ID: entity_id},
                     blocking=True,
+                )
+        elif service == "turn_off":
+            if power_switch:
+                await hass.services.async_call(
+                    "switch", "turn_off", {ATTR_ENTITY_ID: power_switch}, blocking=True,
                 )
             else:
                 await hass.services.async_call(
-                    "climate",
-                    "turn_off",
-                    {ATTR_ENTITY_ID: entity_id},
-                    blocking=True,
+                    "climate", "turn_off", {ATTR_ENTITY_ID: entity_id}, blocking=True,
                 )
             tts_event = TTS_MANUAL_OFF
         elif service == "turn_on":
             if power_switch:
                 await hass.services.async_call(
-                    "switch",
-                    "turn_on",
-                    {ATTR_ENTITY_ID: power_switch},
-                    blocking=True,
+                    "switch", "turn_on", {ATTR_ENTITY_ID: power_switch}, blocking=True,
                 )
             else:
                 await hass.services.async_call(
-                    "climate",
-                    "turn_on",
-                    {ATTR_ENTITY_ID: entity_id},
-                    blocking=True,
+                    "climate", "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=True,
                 )
             tts_event = TTS_MANUAL_ON
         else:
@@ -511,17 +545,11 @@ async def websocket_set_climate_and_announce(
                 if current_state == "off":
                     if power_switch:
                         await hass.services.async_call(
-                            "switch",
-                            "turn_on",
-                            {ATTR_ENTITY_ID: power_switch},
-                            blocking=True,
+                            "switch", "turn_on", {ATTR_ENTITY_ID: power_switch}, blocking=True,
                         )
                     else:
                         await hass.services.async_call(
-                            "climate",
-                            "turn_on",
-                            {ATTR_ENTITY_ID: entity_id},
-                            blocking=True,
+                            "climate", "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=True,
                         )
             await hass.services.async_call(
                 "climate",
@@ -535,19 +563,17 @@ async def websocket_set_climate_and_announce(
             from .tts_event import async_send_tts_for_event
             from .notification_event import async_send_notification_for_event
 
+            mode_arg = ""
+            if tts_event == TTS_MODE_CHANGE:
+                mode_arg = hvac_mode or ""
+            elif is_simple and service != "set_hvac_mode":
+                mode_arg = "on" if (service == "turn_on" or (service == "set_hvac_mode" and hvac_mode.lower() != "off")) else "off"
+
             await async_send_tts_for_event(
-                hass,
-                config_manager,
-                entity_id,
-                tts_event,
-                mode=tts_event == TTS_MODE_CHANGE and hvac_mode or "",
+                hass, config_manager, entity_id, tts_event, mode=mode_arg,
             )
             await async_send_notification_for_event(
-                hass,
-                config_manager,
-                entity_id,
-                tts_event,
-                mode=tts_event == TTS_MODE_CHANGE and hvac_mode or "",
+                hass, config_manager, entity_id, tts_event, mode=mode_arg,
             )
 
         connection.send_result(msg["id"], {"success": True})
@@ -575,6 +601,13 @@ async def websocket_set_temperature(
     entity_id = msg["entity_id"]
     temperature = msg["temperature"]
     hvac_mode = msg.get("hvac_mode")
+
+    config_manager = hass.data.get(DOMAIN, {}).get("config_manager")
+    if config_manager:
+        pair = config_manager.get_room_for_control_entity(entity_id)
+        if pair and not pair[1].get("is_smart_appliance", True):
+            connection.send_error(msg["id"], "climate_failed", "Simple appliances do not support temperature control")
+            return
 
     try:
         service_data: dict[str, Any] = {

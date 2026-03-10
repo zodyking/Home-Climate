@@ -123,14 +123,15 @@ def _tracker_key(climate_entity: str) -> str:
 def get_appliance_power_state(
     hass: HomeAssistant,
     config_manager: "ConfigManager",
-    climate_entity: str,
+    control_entity: str,
 ) -> str | None:
     """
     Return power-based on/off state for appliance, or None to use climate entity.
 
+    control_entity: climate entity (smart) or switch entity (simple).
     Returns 'on' | 'off' when power sensor is enabled and debounced state is known.
     """
-    pair = config_manager.get_room_for_climate_entity(climate_entity)
+    pair = config_manager.get_room_for_control_entity(control_entity)
     if not pair:
         return None
     _room, appliance = pair
@@ -143,7 +144,7 @@ def get_appliance_power_state(
     threshold = float(ps.get("power_threshold_w", 10))
     debounce = max(1, min(60, int(ps.get("debounce_sec", 5))))
 
-    key = _tracker_key(climate_entity)
+    key = _tracker_key(control_entity)
     existing = _trackers.get(key)
     if existing:
         if (
@@ -163,15 +164,16 @@ def get_appliance_power_state(
 
 def get_appliance_power_switch(
     config_manager: "ConfigManager",
-    climate_entity: str,
+    control_entity: str,
 ) -> str | None:
     """
     Return switch entity for on/off control when power override is active, or None.
 
+    control_entity: climate entity (smart) or switch entity (simple).
     When power_sensor.enabled and power_sensor.switch are set, automations should
     call switch.turn_on/off instead of climate.turn_on/off.
     """
-    pair = config_manager.get_room_for_climate_entity(climate_entity)
+    pair = config_manager.get_room_for_control_entity(control_entity)
     if not pair:
         return None
     _room, appliance = pair
