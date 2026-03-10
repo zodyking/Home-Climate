@@ -98,8 +98,12 @@ def _default_tts_messages() -> dict:
 def default_appliance_automation() -> dict:
     """Default automation for an appliance."""
     return {
-        "person": "",
-        "zone": "",
+        "person": "",  # legacy; use person_on/person_off
+        "zone": "",  # legacy; use zone_on/zone_off
+        "person_on": "",
+        "zone_on": "",
+        "person_off": "",
+        "zone_off": "",
         "enter_duration_sec": DEFAULT_ENTER_DURATION_SEC,
         "exit_duration_sec": DEFAULT_EXIT_DURATION_SEC,
         "target_temp_on_enter": 22.0,

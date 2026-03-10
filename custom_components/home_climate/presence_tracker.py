@@ -32,8 +32,8 @@ def _build_presence_rules(config_manager: "ConfigManager") -> list[dict[str, Any
     """
     Build presence rules from room.appliances[].automation.
 
-    Each appliance with person+zone configured becomes a rule.
-    Returns list of {room, appliance, climate_entity, person, zone, enter_duration_sec, ...}.
+    Each appliance with person_on+zone_on (and person_off+zone_off) configured becomes a rule.
+    Returns list of {room, appliance, climate_entity, person_on, zone_on, person_off, zone_off, ...}.
     """
     rules = []
     for room in config_manager.rooms:
@@ -42,16 +42,22 @@ def _build_presence_rules(config_manager: "ConfigManager") -> list[dict[str, Any
             if not climate_entity:
                 continue
             auto = appliance.get("automation") or {}
-            person = (auto.get("person") or "").strip()
-            zone = (auto.get("zone") or "").strip()
-            if not person or not zone:
+            person_on = (auto.get("person_on") or "").strip()
+            zone_on = (auto.get("zone_on") or "").strip()
+            person_off = (auto.get("person_off") or person_on or "").strip()
+            zone_off = (auto.get("zone_off") or zone_on or "").strip()
+            if not person_on or not zone_on:
+                continue
+            if not person_off or not zone_off:
                 continue
             rules.append({
                 "room": room,
                 "appliance": appliance,
                 "climate_entity": climate_entity,
-                "person": person,
-                "zone": zone,
+                "person_on": person_on,
+                "zone_on": zone_on,
+                "person_off": person_off,
+                "zone_off": zone_off,
                 "enter_duration_sec": max(0, min(600, int(auto.get("enter_duration_sec") or 30))),
                 "exit_duration_sec": max(0, min(3600, int(auto.get("exit_duration_sec") or 300))),
                 "target_temp_on_enter": auto.get("target_temp_on_enter"),
@@ -59,9 +65,14 @@ def _build_presence_rules(config_manager: "ConfigManager") -> list[dict[str, Any
     return rules
 
 
-def _rule_key(rule: dict[str, Any]) -> str:
-    """Unique key for a presence rule."""
-    return f"{rule.get('person')}|{rule.get('zone')}|{rule.get('climate_entity')}"
+def _enter_rule_key(rule: dict[str, Any]) -> str:
+    """Unique key for enter task."""
+    return f"enter|{rule.get('person_on')}|{rule.get('zone_on')}|{rule.get('climate_entity')}"
+
+
+def _exit_rule_key(rule: dict[str, Any]) -> str:
+    """Unique key for exit task."""
+    return f"exit|{rule.get('person_off')}|{rule.get('zone_off')}|{rule.get('climate_entity')}"
 
 
 class PresenceTracker:
@@ -90,13 +101,14 @@ class PresenceTracker:
         self._exit_tasks.clear()
 
     def _setup_listeners(self) -> None:
-        """Set up state listeners for all person entities in appliance automation rules."""
+        """Set up state listeners for all person entities (person_on and person_off) in appliance automation rules."""
         rules = _build_presence_rules(self.config_manager)
         person_entities: set[str] = set()
         for rule in rules:
-            person = (rule.get("person") or "").strip()
-            if person and person.startswith("person."):
-                person_entities.add(person)
+            for key in ("person_on", "person_off"):
+                person = (rule.get(key) or "").strip()
+                if person and person.startswith("person."):
+                    person_entities.add(person)
 
         for entity_id in person_entities:
             unsub = self.hass.helpers.event.async_track_state_change(
@@ -115,48 +127,54 @@ class PresenceTracker:
 
         rules = _build_presence_rules(self.config_manager)
         for rule in rules:
-            if (rule.get("person") or "").strip() != entity_id:
-                continue
-
-            zone = (rule.get("zone") or "").strip()
+            person_on = (rule.get("person_on") or "").strip()
+            person_off = (rule.get("person_off") or "").strip()
+            zone_on = (rule.get("zone_on") or "").strip()
+            zone_off = (rule.get("zone_off") or "").strip()
             climate_entity = (rule.get("climate_entity") or "").strip()
-            if not zone or not climate_entity:
+            if not climate_entity:
                 continue
 
-            key = _rule_key(rule)
-            was_in_zone = _person_in_zone(old_val, zone)
-            now_in_zone = _person_in_zone(new_val, zone)
+            # Person entered/left zone_on -> handle enter task
+            if entity_id == person_on and zone_on:
+                enter_key = _enter_rule_key(rule)
+                was_in = _person_in_zone(old_val, zone_on)
+                now_in = _person_in_zone(new_val, zone_on)
+                if self._enter_tasks.get(enter_key) and not self._enter_tasks[enter_key].done():
+                    self._enter_tasks[enter_key].cancel()
+                    self._enter_tasks.pop(enter_key, None)
+                if now_in and not was_in:
+                    enter_sec = int(rule.get("enter_duration_sec") or 30)
+                    self._enter_tasks[enter_key] = asyncio.create_task(
+                        self._enter_delayed(rule, enter_sec)
+                    )
 
-            if self._enter_tasks.get(key) and not self._enter_tasks[key].done():
-                self._enter_tasks[key].cancel()
-                self._enter_tasks.pop(key, None)
-            if self._exit_tasks.get(key) and not self._exit_tasks[key].done():
-                self._exit_tasks[key].cancel()
-                self._exit_tasks.pop(key, None)
-
-            if now_in_zone and not was_in_zone:
-                enter_sec = int(rule.get("enter_duration_sec") or 30)
-                self._enter_tasks[key] = asyncio.create_task(
-                    self._enter_delayed(rule, enter_sec)
-                )
-            elif was_in_zone and not now_in_zone:
-                exit_sec = int(rule.get("exit_duration_sec") or 300)
-                self._exit_tasks[key] = asyncio.create_task(
-                    self._exit_delayed(rule, exit_sec)
-                )
+            # Person left zone_off -> handle exit task
+            if entity_id == person_off and zone_off:
+                exit_key = _exit_rule_key(rule)
+                was_in = _person_in_zone(old_val, zone_off)
+                now_in = _person_in_zone(new_val, zone_off)
+                if self._exit_tasks.get(exit_key) and not self._exit_tasks[exit_key].done():
+                    self._exit_tasks[exit_key].cancel()
+                    self._exit_tasks.pop(exit_key, None)
+                if was_in and not now_in:
+                    exit_sec = int(rule.get("exit_duration_sec") or 300)
+                    self._exit_tasks[exit_key] = asyncio.create_task(
+                        self._exit_delayed(rule, exit_sec)
+                    )
 
     async def _enter_delayed(self, rule: dict[str, Any], delay_sec: int) -> None:
-        """After delay, if person still in zone, turn on climate."""
+        """After delay, if person_on still in zone_on, turn on climate."""
         await asyncio.sleep(delay_sec)
-        key = _rule_key(rule)
-        self._enter_tasks.pop(key, None)
+        enter_key = _enter_rule_key(rule)
+        self._enter_tasks.pop(enter_key, None)
 
-        person = (rule.get("person") or "").strip()
-        zone = (rule.get("zone") or "").strip()
+        person_on = (rule.get("person_on") or "").strip()
+        zone_on = (rule.get("zone_on") or "").strip()
         climate_entity = (rule.get("climate_entity") or "").strip()
 
-        state = self.hass.states.get(person)
-        if not state or not _person_in_zone(state.state, zone):
+        state = self.hass.states.get(person_on)
+        if not state or not _person_in_zone(state.state, zone_on):
             return
 
         from .power_detector import get_appliance_power_state, get_appliance_power_switch
@@ -221,17 +239,17 @@ class PresenceTracker:
             _LOGGER.error("Presence enter: failed to turn on %s: %s", climate_entity, e)
 
     async def _exit_delayed(self, rule: dict[str, Any], delay_sec: int) -> None:
-        """After delay, turn off climate (unless person re-entered)."""
+        """After delay, turn off climate (unless person_off re-entered zone_off)."""
         await asyncio.sleep(delay_sec)
-        key = _rule_key(rule)
-        self._exit_tasks.pop(key, None)
+        exit_key = _exit_rule_key(rule)
+        self._exit_tasks.pop(exit_key, None)
 
-        person = (rule.get("person") or "").strip()
-        zone = (rule.get("zone") or "").strip()
+        person_off = (rule.get("person_off") or "").strip()
+        zone_off = (rule.get("zone_off") or "").strip()
         climate_entity = (rule.get("climate_entity") or "").strip()
 
-        state = self.hass.states.get(person)
-        if state and _person_in_zone(state.state, zone):
+        state = self.hass.states.get(person_off)
+        if state and _person_in_zone(state.state, zone_off):
             return
 
         from .power_detector import get_appliance_power_switch

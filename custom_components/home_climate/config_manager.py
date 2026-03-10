@@ -286,6 +286,7 @@ class ConfigManager:
                 "humidity_sensor": str(room.get("humidity_sensor", "")).strip() or None,
                 "media_player": str(room.get("media_player", "")).strip() or "",
                 "volume": max(0.0, min(1.0, _safe_float(room.get("volume"), 0.7))),
+                "notify_entity": str(room.get("notify_entity", "")).strip() or "",
                 "tts_overrides": dict(room.get("tts_overrides") or {}),
                 "appliances": self._validate_appliances(room.get("appliances") or []),
             })
@@ -306,7 +307,7 @@ class ConfigManager:
             auto_raw = app.get("automation") or {}
             auto = {}
             for k, default_val in default_auto.items():
-                if k in ("person", "zone", "outdoor_temp_sensor", "date_winter_start", "date_winter_end"):
+                if k in ("person", "zone", "person_on", "zone_on", "person_off", "zone_off", "outdoor_temp_sensor", "date_winter_start", "date_winter_end"):
                     auto[k] = str(auto_raw.get(k, default_val)).strip() or default_val
                 elif k in ("enter_duration_sec", "exit_duration_sec"):
                     auto[k] = max(0, min(3600, _safe_int(auto_raw.get(k), default_val)))
@@ -321,6 +322,16 @@ class ConfigManager:
                     auto[k] = max(-10, min(40, _safe_float(auto_raw.get(k), default_val)))
                 else:
                     auto[k] = auto_raw.get(k, default_val)
+
+            # Migrate legacy person/zone to person_on/zone_on and person_off/zone_off
+            if not auto.get("person_on") and auto.get("person"):
+                auto["person_on"] = auto["person"]
+            if not auto.get("zone_on") and auto.get("zone"):
+                auto["zone_on"] = auto["zone"]
+            if not auto.get("person_off") and auto.get("person_on"):
+                auto["person_off"] = auto["person_on"]
+            if not auto.get("zone_off") and auto.get("zone_on"):
+                auto["zone_off"] = auto["zone_on"]
 
             power_sensor_raw = app.get("power_sensor") or {}
             power_sensor = {}

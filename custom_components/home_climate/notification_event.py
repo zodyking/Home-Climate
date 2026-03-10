@@ -61,7 +61,7 @@ async def async_send_notification_for_event(
     if not notif_settings.get("enabled", True):
         return
 
-    notify_entity = (notif_settings.get("notify_entity") or "").strip()
+    notify_entity = (room.get("notify_entity") or "").strip() or (notif_settings.get("notify_entity") or "").strip()
     if not notify_entity:
         _LOGGER.debug(
             "No notify entity configured, skipping notification for %s",

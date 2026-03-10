@@ -778,6 +778,7 @@ class HomeWeatherPanel extends HTMLElement {
           humidity_sensor: "",
           media_player: "",
           volume: 0.7,
+          notify_entity: "",
           tts_overrides: {},
           appliances: [],
         });
@@ -868,8 +869,10 @@ class HomeWeatherPanel extends HTMLElement {
           custom_name: "",
           climate_entity: "",
           automation: {
-            person: "",
-            zone: "",
+            person_on: "",
+            zone_on: "",
+            person_off: "",
+            zone_off: "",
             enter_duration_sec: 30,
             exit_duration_sec: 300,
             target_temp_on_enter: this._fToC(72),
@@ -1763,6 +1766,10 @@ class HomeWeatherPanel extends HTMLElement {
             <label class="form-label">Volume (0-1)</label>
             <input type="number" class="form-input" data-field="volume" value="${room.volume ?? 0.7}" step="0.1" min="0" max="1">
           </div>
+          <div class="form-group">
+            <label class="form-label">Notify entity (for this room's notifications)</label>
+            ${this._renderEntityDropdown(room.notify_entity || "", "notify", "notify_entity", "Select notify entity")}
+          </div>
         </div>
         <div class="settings-section-divider"></div>
         <div class="settings-section">
@@ -1815,26 +1822,38 @@ class HomeWeatherPanel extends HTMLElement {
         </div>
         <div class="settings-section-divider"></div>
         <div class="settings-section">
-          <h4 class="settings-section-title">Automation (enter/leave zone)</h4>
+          <h4 class="settings-section-title">Turn on (enter zone)</h4>
           <div class="form-group">
             <label class="form-label">Person</label>
-            ${this._renderEntityAutocomplete(auto.person || "", "person", "person", "e.g. person.brandon")}
+            ${this._renderEntityAutocomplete(auto.person_on || auto.person || "", "person", "person_on", "e.g. person.brandon")}
           </div>
           <div class="form-group">
             <label class="form-label">Zone</label>
-            ${this._renderEntityAutocomplete(auto.zone || "", "zone", "zone", "e.g. zone.home")}
+            ${this._renderEntityAutocomplete(auto.zone_on || auto.zone || "", "zone", "zone_on", "e.g. zone.bedroom")}
           </div>
           <div class="form-group">
             <label class="form-label">Enter duration (sec)</label>
             <input type="number" class="form-input" data-field="enter_duration_sec" value="${auto.enter_duration_sec ?? 30}" min="0">
           </div>
           <div class="form-group">
-            <label class="form-label">Exit duration (sec)</label>
-            <input type="number" class="form-input" data-field="exit_duration_sec" value="${auto.exit_duration_sec ?? 300}" min="0">
-          </div>
-          <div class="form-group">
             <label class="form-label">Target temp on enter (°F)</label>
             <input type="number" class="form-input" data-field="target_temp_on_enter" value="${this._cToF(auto.target_temp_on_enter ?? this._fToC(72))}" step="0.5">
+          </div>
+        </div>
+        <div class="settings-section-divider"></div>
+        <div class="settings-section">
+          <h4 class="settings-section-title">Turn off (leave zone)</h4>
+          <div class="form-group">
+            <label class="form-label">Person</label>
+            ${this._renderEntityAutocomplete(auto.person_off || auto.person_on || auto.person || "", "person", "person_off", "e.g. person.brandon")}
+          </div>
+          <div class="form-group">
+            <label class="form-label">Zone</label>
+            ${this._renderEntityAutocomplete(auto.zone_off || auto.zone_on || auto.zone || "", "zone", "zone_off", "e.g. zone.living_room")}
+          </div>
+          <div class="form-group">
+            <label class="form-label">Exit duration (sec)</label>
+            <input type="number" class="form-input" data-field="exit_duration_sec" value="${auto.exit_duration_sec ?? 300}" min="0">
           </div>
         </div>
         <div class="settings-section-divider"></div>
@@ -1896,6 +1915,7 @@ class HomeWeatherPanel extends HTMLElement {
       const humidityEl = row.querySelector("[data-field='humidity_sensor']");
       const mediaEl = row.querySelector("[data-field='media_player']");
       const volumeEl = row.querySelector("[data-field='volume']");
+      const notifyEl = row.querySelector("[data-field='notify_entity']");
 
       const appliances = [];
       const acards = root.querySelectorAll(`.appliance-card[data-room-index="${i}"]`);
@@ -1903,8 +1923,10 @@ class HomeWeatherPanel extends HTMLElement {
         const climateEl = acard.querySelector("[data-field='climate_entity']");
         const deviceTypeEl = acard.querySelector("[data-field='device_type']");
         const customNameEl = acard.querySelector("[data-field='custom_name']");
-        const personEl = acard.querySelector("[data-field='person']");
-        const zoneEl = acard.querySelector("[data-field='zone']");
+        const personOnEl = acard.querySelector("[data-field='person_on']");
+        const zoneOnEl = acard.querySelector("[data-field='zone_on']");
+        const personOffEl = acard.querySelector("[data-field='person_off']");
+        const zoneOffEl = acard.querySelector("[data-field='zone_off']");
         const enterEl = acard.querySelector("[data-field='enter_duration_sec']");
         const exitEl = acard.querySelector("[data-field='exit_duration_sec']");
         const targetTempEl = acard.querySelector("[data-field='target_temp_on_enter']");
@@ -1937,13 +1959,15 @@ class HomeWeatherPanel extends HTMLElement {
           custom_name: (customNameEl?.value || "").trim(),
           climate_entity: (climateEl?.value || "").trim() || null,
           automation: {
-            person: (personEl?.value || "").trim(),
-            zone: (zoneEl?.value || "").trim(),
+            person_on: (personOnEl?.value || "").trim(),
+            zone_on: (zoneOnEl?.value || "").trim(),
+            person_off: (personOffEl?.value || "").trim(),
+            zone_off: (zoneOffEl?.value || "").trim(),
             enter_duration_sec: parseInt(enterEl?.value, 10) || 30,
             exit_duration_sec: parseInt(exitEl?.value, 10) || 300,
-            target_temp_on_enter: parseFloat(targetTempEl?.value) || 22,
-            heat_threshold_c: parseFloat(heatEl?.value) || 18,
-            cool_threshold_c: parseFloat(coolEl?.value) || 26,
+            target_temp_on_enter: this._fToC(parseFloat(targetTempEl?.value)) || 22,
+            heat_threshold_c: this._fToC(parseFloat(heatEl?.value)) || 18,
+            cool_threshold_c: this._fToC(parseFloat(coolEl?.value)) || 26,
             seasonal_mode: "outdoor_temp",
             outdoor_temp_sensor: "",
             date_winter_start: "11-01",
@@ -1960,6 +1984,7 @@ class HomeWeatherPanel extends HTMLElement {
         humidity_sensor: (humidityEl?.value || "").trim() || null,
         media_player: (mediaEl?.value || "").trim() || "",
         volume: parseFloat(volumeEl?.value) || 0.7,
+        notify_entity: (notifyEl?.value || "").trim() || "",
         tts_overrides: {},
         appliances,
       });
