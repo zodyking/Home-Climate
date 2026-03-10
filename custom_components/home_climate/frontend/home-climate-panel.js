@@ -23,6 +23,7 @@ const STYLES = `
   .panel-container {
     min-height: 100vh;
     padding: clamp(12px, 2.5vw, 24px);
+    overflow-x: hidden;
   }
   .panel-header {
     display: flex;
@@ -536,21 +537,16 @@ class HomeWeatherPanel extends HTMLElement {
   connectedCallback() {
     this._render();
     this._loadConfig();
-    this.shadowRoot.addEventListener("click", this._onPanelClick);
   }
 
   disconnectedCallback() {
     this._stopRefresh();
-    if (this.shadowRoot) this.shadowRoot.removeEventListener("click", this._onPanelClick);
   }
 
-  _onPanelClick = (e) => {
-    if (e.target.closest("[data-action='toggle-settings']") || e.target.closest(".settings-btn")) {
-      e.preventDefault();
-      this._showSettings = !this._showSettings;
-      this._render();
-    }
-  };
+  _toggleSettings() {
+    this._showSettings = !this._showSettings;
+    this._render();
+  }
 
   _startRefresh() {
     this._stopRefresh();
@@ -749,7 +745,7 @@ class HomeWeatherPanel extends HTMLElement {
               <svg viewBox="0 0 24 24"><path d="M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z"/></svg>
             </button>
             ${this._isAdmin ? `
-              <button type="button" class="settings-btn" aria-label="Settings" title="Settings" data-action="toggle-settings">
+              <button type="button" class="settings-btn" aria-label="Settings" title="Settings" data-action="toggle-settings" onclick="this.getRootNode().host._toggleSettings()">
                 <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
               </button>
             ` : ""}
