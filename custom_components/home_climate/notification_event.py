@@ -118,6 +118,8 @@ async def async_send_notification_for_event(
     title = prefix
     entity_id = notify_entity if notify_entity.startswith("notify.") else f"notify.{notify_entity}"
     service_name = entity_id.split(".", 1)[1] if "." in entity_id else notify_entity
+    # Remove apostrophes etc. - HA mobile_app uses slug like brandons_iphone not brandon's_iphone
+    service_name = service_name.replace("'", "").replace('"', "").replace("`", "")
 
     _LOGGER.debug(
         "Sending notification for %s to %s: %s", event, entity_id, message[:80]
