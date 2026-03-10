@@ -278,16 +278,6 @@ class ConfigManager:
             if not isinstance(room, dict) or not room.get("name"):
                 continue
             room_id = room.get("id") or str(uuid.uuid4())
-            notification_recipients = []
-            for rec in room.get("notification_recipients") or []:
-                if isinstance(rec, dict):
-                    person = str(rec.get("person", "")).strip()
-                    notify_entity = str(rec.get("notify_entity", "")).strip()
-                    if notify_entity:
-                        notification_recipients.append({
-                            "person": person,
-                            "notify_entity": notify_entity,
-                        })
 
             validated.append({
                 "id": room_id,
@@ -297,7 +287,6 @@ class ConfigManager:
                 "media_player": str(room.get("media_player", "")).strip() or "",
                 "volume": max(0.0, min(1.0, _safe_float(room.get("volume"), 0.7))),
                 "tts_overrides": dict(room.get("tts_overrides") or {}),
-                "notification_recipients": notification_recipients,
                 "appliances": self._validate_appliances(room.get("appliances") or []),
             })
         return validated
@@ -339,6 +328,7 @@ class ConfigManager:
                 power_sensor = {
                     "enabled": True,
                     "sensor": str(power_sensor_raw.get("sensor", "")).strip() or "",
+                    "switch": str(power_sensor_raw.get("switch", "")).strip() or "",
                     "power_threshold_w": max(
                         0,
                         min(5000, _safe_float(power_sensor_raw.get("power_threshold_w"), DEFAULT_POWER_THRESHOLD_W)),
@@ -383,11 +373,16 @@ class ConfigManager:
                     },
                 )
 
+        notify_entity = str(notif.get("notify_entity", "")).strip()
+        if not notify_entity and notif.get("default_notify_service"):
+            notify_entity = str(notif.get("default_notify_service", "")).strip()
+        if not notify_entity:
+            notify_entity = str(default.get("notify_entity", "")).strip()
+
         return {
+            "enabled": bool(notif.get("enabled", default.get("enabled", True))),
+            "notify_entity": notify_entity,
             "prefix": str(notif.get("prefix", default["prefix"])),
-            "default_notify_service": str(
-                notif.get("default_notify_service", default["default_notify_service"])
-            ).strip(),
             "messages": messages,
         }
 

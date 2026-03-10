@@ -151,6 +151,26 @@ def get_appliance_power_state(
     return _trackers[key].get_state()
 
 
+def get_appliance_power_switch(
+    config_manager: "ConfigManager",
+    climate_entity: str,
+) -> str | None:
+    """
+    Return switch entity for on/off control when power override is active, or None.
+
+    When power_sensor.enabled and power_sensor.switch are set, automations should
+    call switch.turn_on/off instead of climate.turn_on/off.
+    """
+    pair = config_manager.get_room_for_climate_entity(climate_entity)
+    if not pair:
+        return None
+    _room, appliance = pair
+    ps = appliance.get("power_sensor") or {}
+    if not ps or not ps.get("enabled"):
+        return None
+    return (ps.get("switch") or "").strip() or None
+
+
 def async_stop_power_detectors(hass: HomeAssistant) -> None:
     """Stop all power state trackers (on integration unload)."""
     for tracker in _trackers.values():

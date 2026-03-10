@@ -159,18 +159,25 @@ class PresenceTracker:
         if not state or not _person_in_zone(state.state, zone):
             return
 
-        from .power_detector import get_appliance_power_state
-        power_state = get_appliance_power_state(
-            self.hass, self.config_manager, climate_entity
-        )
-        if power_state == "off":
-            _LOGGER.debug(
-                "Skipping presence turn_on for %s: power sensor reports off",
-                climate_entity,
+        from .power_detector import get_appliance_power_state, get_appliance_power_switch
+        power_switch = get_appliance_power_switch(self.config_manager, climate_entity)
+        if power_switch:
+            await self.hass.services.async_call(
+                "switch",
+                "turn_on",
+                {ATTR_ENTITY_ID: power_switch},
+                blocking=True,
             )
-            return
-
-        try:
+        else:
+            power_state = get_appliance_power_state(
+                self.hass, self.config_manager, climate_entity
+            )
+            if power_state == "off":
+                _LOGGER.debug(
+                    "Skipping presence turn_on for %s: power sensor reports off",
+                    climate_entity,
+                )
+                return
             await self.hass.services.async_call(
                 "climate",
                 "turn_on",
@@ -178,7 +185,8 @@ class PresenceTracker:
                 blocking=True,
             )
 
-            target_temp = rule.get("target_temp_on_enter")
+        target_temp = rule.get("target_temp_on_enter")
+        try:
             if target_temp is not None:
                 await self.hass.services.async_call(
                     "climate",
@@ -189,7 +197,11 @@ class PresenceTracker:
                     },
                     blocking=True,
                 )
+        except Exception as e:
+            _LOGGER.error("Presence enter: failed to turn on %s: %s", climate_entity, e)
+            return
 
+        try:
             from .tts_event import async_send_tts_for_event
             from .notification_event import async_send_notification_for_event
 
@@ -222,7 +234,16 @@ class PresenceTracker:
         if state and _person_in_zone(state.state, zone):
             return
 
-        try:
+        from .power_detector import get_appliance_power_switch
+        power_switch = get_appliance_power_switch(self.config_manager, climate_entity)
+        if power_switch:
+            await self.hass.services.async_call(
+                "switch",
+                "turn_off",
+                {ATTR_ENTITY_ID: power_switch},
+                blocking=True,
+            )
+        else:
             await self.hass.services.async_call(
                 "climate",
                 "turn_off",
@@ -230,6 +251,7 @@ class PresenceTracker:
                 blocking=True,
             )
 
+        try:
             from .tts_event import async_send_tts_for_event
             from .notification_event import async_send_notification_for_event
 

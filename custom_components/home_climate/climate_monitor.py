@@ -182,31 +182,54 @@ class ClimateMonitor:
 
                 if target_mode != current_mode and target_mode is not None:
                     if target_mode != "off":
-                        from .power_detector import get_appliance_power_state
-                        power_state = get_appliance_power_state(
-                            self.hass, config_manager, climate_entity
-                        )
-                        if power_state == "off":
-                            _LOGGER.debug(
-                                "Skipping turn_on for %s: power sensor reports off",
-                                climate_entity,
+                        from .power_detector import get_appliance_power_state, get_appliance_power_switch
+                        if get_appliance_power_switch(config_manager, climate_entity):
+                            pass
+                        else:
+                            power_state = get_appliance_power_state(
+                                self.hass, config_manager, climate_entity
                             )
-                            continue
+                            if power_state == "off":
+                                _LOGGER.debug(
+                                    "Skipping turn_on for %s: power sensor reports off",
+                                    climate_entity,
+                                )
+                                continue
                     await self._set_climate_mode(climate_entity, target_mode)
                     self._last_mode[climate_entity] = target_mode
                     self._cooldown_until[climate_entity] = now + self._COOLDOWN_SEC
 
     async def _set_climate_mode(self, entity_id: str, mode: str) -> None:
         """Set climate mode and optionally announce via TTS."""
+        from .power_detector import get_appliance_power_switch
+
+        config_manager = self.config_manager
+        power_switch = get_appliance_power_switch(config_manager, entity_id)
+
         try:
             if mode == "off":
-                await self.hass.services.async_call(
-                    "climate",
-                    "turn_off",
-                    {ATTR_ENTITY_ID: entity_id},
-                    blocking=True,
-                )
+                if power_switch:
+                    await self.hass.services.async_call(
+                        "switch",
+                        "turn_off",
+                        {ATTR_ENTITY_ID: power_switch},
+                        blocking=True,
+                    )
+                else:
+                    await self.hass.services.async_call(
+                        "climate",
+                        "turn_off",
+                        {ATTR_ENTITY_ID: entity_id},
+                        blocking=True,
+                    )
             else:
+                if power_switch:
+                    await self.hass.services.async_call(
+                        "switch",
+                        "turn_on",
+                        {ATTR_ENTITY_ID: power_switch},
+                        blocking=True,
+                    )
                 await self.hass.services.async_call(
                     "climate",
                     "set_hvac_mode",

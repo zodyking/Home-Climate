@@ -56,21 +56,18 @@ async def async_send_notification_for_event(
         return
 
     room, appliance = pair
-    recipients = room.get("notification_recipients") or []
-    if not recipients:
-        default_service = (
-            config_manager.notification_settings.get("default_notify_service")
-            or ""
-        ).strip()
-        if not default_service:
-            _LOGGER.debug(
-                "No notification recipients for room %s, skipping",
-                room.get("name"),
-            )
-            return
-        recipients = [{"person": "", "notify_entity": default_service}]
 
     notif_settings = config_manager.notification_settings
+    if not notif_settings.get("enabled", True):
+        return
+
+    notify_entity = (notif_settings.get("notify_entity") or "").strip()
+    if not notify_entity:
+        _LOGGER.debug(
+            "No notify entity configured, skipping notification for %s",
+            room.get("name"),
+        )
+        return
     msg_entry = notif_settings.get("messages", {}).get(event)
     if not msg_entry or not msg_entry.get("enabled", True):
         return
@@ -106,23 +103,19 @@ async def async_send_notification_for_event(
         return
 
     title = prefix
-    for rec in recipients:
-        notify_entity = (rec.get("notify_entity") or "").strip()
-        if not notify_entity:
-            continue
-        try:
-            service_name = (
-                notify_entity.split(".", 1)[1]
-                if notify_entity.startswith("notify.")
-                else notify_entity
-            )
-            await hass.services.async_call(
-                "notify",
-                service_name,
-                {"title": title, "message": message},
-                blocking=False,
-            )
-        except Exception as e:
-            _LOGGER.warning(
-                "Failed to send notification to %s: %s", notify_entity, e
-            )
+    try:
+        service_name = (
+            notify_entity.split(".", 1)[1]
+            if notify_entity.startswith("notify.")
+            else notify_entity
+        )
+        await hass.services.async_call(
+            "notify",
+            service_name,
+            {"title": title, "message": message},
+            blocking=False,
+        )
+    except Exception as e:
+        _LOGGER.warning(
+            "Failed to send notification to %s: %s", notify_entity, e
+        )

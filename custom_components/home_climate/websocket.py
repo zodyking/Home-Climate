@@ -85,6 +85,37 @@ async def websocket_save_config(
         connection.send_error(msg["id"], "save_failed", str(e))
 
 
+def _entity_list_from_registry(
+    hass: HomeAssistant,
+    domain: str,
+    extra_attrs: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Get all entities for a domain from entity registry (includes disabled/unavailable)."""
+    from homeassistant.helpers import entity_registry as er
+
+    registry = er.async_get(hass)
+    out: list[dict[str, Any]] = []
+    for entry in registry.entities.values():
+        if not entry.entity_id.startswith(f"{domain}."):
+            continue
+        state = hass.states.get(entry.entity_id)
+        friendly_name = (
+            state.attributes.get("friendly_name")
+            if state
+            else None
+        ) or entry.name or entry.original_name or entry.entity_id
+        item: dict[str, Any] = {
+            "entity_id": entry.entity_id,
+            "friendly_name": friendly_name,
+        }
+        if extra_attrs and state:
+            for attr in extra_attrs:
+                if attr in state.attributes:
+                    item[attr] = state.attributes[attr]
+        out.append(item)
+    return sorted(out, key=lambda x: (x["friendly_name"] or "").lower())
+
+
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "home_climate/get_entities",
@@ -97,7 +128,7 @@ async def websocket_get_entities(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Get available entities (climate, sensors, persons, zones, media players)."""
+    """Get available entities from entity registry (climate, sensors, persons, zones, media_players, switches, notify)."""
     entity_type = msg.get("entity_type")
     result: dict[str, list[dict[str, Any]]] = {
         "climate": [],
@@ -107,62 +138,28 @@ async def websocket_get_entities(
         "media_players": [],
         "weather": [],
         "notify": [],
+        "switch": [],
     }
 
-    for state in hass.states.async_all():
-        entity_id = state.entity_id
-        friendly_name = state.attributes.get("friendly_name", entity_id)
-
-        if entity_type is None or entity_type == "climate":
-            if entity_id.startswith("climate."):
-                result["climate"].append({
-                    "entity_id": entity_id,
-                    "friendly_name": friendly_name,
-                })
-
-        if entity_type is None or entity_type == "sensor":
-            if entity_id.startswith("sensor."):
-                unit = state.attributes.get("unit_of_measurement", "")
-                result["sensors"].append({
-                    "entity_id": entity_id,
-                    "friendly_name": friendly_name,
-                    "unit": unit,
-                })
-
-        if entity_type is None or entity_type == "person":
-            if entity_id.startswith("person."):
-                result["persons"].append({
-                    "entity_id": entity_id,
-                    "friendly_name": friendly_name,
-                })
-
-        if entity_type is None or entity_type == "zone":
-            if entity_id.startswith("zone."):
-                result["zones"].append({
-                    "entity_id": entity_id,
-                    "friendly_name": friendly_name,
-                })
-
-        if entity_type is None or entity_type == "media_player":
-            if entity_id.startswith("media_player."):
-                result["media_players"].append({
-                    "entity_id": entity_id,
-                    "friendly_name": friendly_name,
-                })
-
-        if entity_type is None or entity_type == "weather":
-            if entity_id.startswith("weather."):
-                result["weather"].append({
-                    "entity_id": entity_id,
-                    "friendly_name": friendly_name,
-                })
-
-        if entity_type is None or entity_type == "notify":
-            if entity_id.startswith("notify."):
-                result["notify"].append({
-                    "entity_id": entity_id,
-                    "friendly_name": friendly_name,
-                })
+    domains = [
+        ("climate", "climate"),
+        ("sensor", "sensors"),
+        ("person", "persons"),
+        ("zone", "zones"),
+        ("media_player", "media_players"),
+        ("weather", "weather"),
+        ("notify", "notify"),
+        ("switch", "switch"),
+    ]
+    for domain, key in domains:
+        if entity_type is not None and entity_type != key and entity_type != domain:
+            continue
+        extra = ["unit_of_measurement"] if domain == "sensor" else None
+        items = _entity_list_from_registry(hass, domain, extra)
+        for it in items:
+            if domain == "sensor" and "unit_of_measurement" not in it:
+                it["unit_of_measurement"] = ""
+        result[key] = items
 
     connection.send_result(msg["id"], result)
 
@@ -426,34 +423,64 @@ async def websocket_set_climate_and_announce(
     service = msg["service"]
     hvac_mode = msg.get("hvac_mode") or "off"
 
+    config_manager = hass.data.get(DOMAIN, {}).get("config_manager")
+    power_switch = None
+    if config_manager:
+        from .power_detector import get_appliance_power_switch
+        power_switch = get_appliance_power_switch(config_manager, entity_id)
+
     try:
         if service == "turn_off":
-            await hass.services.async_call(
-                "climate",
-                "turn_off",
-                {ATTR_ENTITY_ID: entity_id},
-                blocking=True,
-            )
+            if power_switch:
+                await hass.services.async_call(
+                    "switch",
+                    "turn_off",
+                    {ATTR_ENTITY_ID: power_switch},
+                    blocking=True,
+                )
+            else:
+                await hass.services.async_call(
+                    "climate",
+                    "turn_off",
+                    {ATTR_ENTITY_ID: entity_id},
+                    blocking=True,
+                )
             tts_event = TTS_MANUAL_OFF
         elif service == "turn_on":
-            await hass.services.async_call(
-                "climate",
-                "turn_on",
-                {ATTR_ENTITY_ID: entity_id},
-                blocking=True,
-            )
+            if power_switch:
+                await hass.services.async_call(
+                    "switch",
+                    "turn_on",
+                    {ATTR_ENTITY_ID: power_switch},
+                    blocking=True,
+                )
+            else:
+                await hass.services.async_call(
+                    "climate",
+                    "turn_on",
+                    {ATTR_ENTITY_ID: entity_id},
+                    blocking=True,
+                )
             tts_event = TTS_MANUAL_ON
         else:
             if hvac_mode and hvac_mode.lower() != "off":
                 state = hass.states.get(entity_id)
                 current_state = (state.state if state else "").lower()
                 if current_state == "off":
-                    await hass.services.async_call(
-                        "climate",
-                        "turn_on",
-                        {ATTR_ENTITY_ID: entity_id},
-                        blocking=True,
-                    )
+                    if power_switch:
+                        await hass.services.async_call(
+                            "switch",
+                            "turn_on",
+                            {ATTR_ENTITY_ID: power_switch},
+                            blocking=True,
+                        )
+                    else:
+                        await hass.services.async_call(
+                            "climate",
+                            "turn_on",
+                            {ATTR_ENTITY_ID: entity_id},
+                            blocking=True,
+                        )
             await hass.services.async_call(
                 "climate",
                 "set_hvac_mode",
@@ -462,7 +489,6 @@ async def websocket_set_climate_and_announce(
             )
             tts_event = TTS_MODE_CHANGE
 
-        config_manager = hass.data.get(DOMAIN, {}).get("config_manager")
         if config_manager:
             from .tts_event import async_send_tts_for_event
             from .notification_event import async_send_notification_for_event

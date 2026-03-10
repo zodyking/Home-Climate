@@ -569,11 +569,11 @@ class HomeWeatherPanel extends HTMLElement {
       const [configRes, userRes, entitiesRes] = await Promise.all([
         this._hass.callWS({ type: "home_climate/get_config" }),
         this._hass.callWS({ type: "home_climate/get_user_info" }).catch(() => ({ is_admin: false })),
-        this._hass.callWS({ type: "home_climate/get_entities" }).catch(() => ({ climate: [], sensors: [], persons: [], zones: [], media_players: [], weather: [] })),
+        this._hass.callWS({ type: "home_climate/get_entities" }).catch(() => ({ climate: [], sensors: [], persons: [], zones: [], media_players: [], weather: [], notify: [], switch: [] })),
       ]);
       this._config = configRes || {};
       this._isAdmin = userRes?.is_admin === true;
-      this._entities = entitiesRes || { climate: [], sensors: [], persons: [], zones: [], media_players: [], weather: [], notify: [] };
+      this._entities = entitiesRes || { climate: [], sensors: [], persons: [], zones: [], media_players: [], weather: [], notify: [], switch: [] };
       await this._loadDashboardData();
       this._loading = false;
       this._render();
@@ -779,7 +779,6 @@ class HomeWeatherPanel extends HTMLElement {
           media_player: "",
           volume: 0.7,
           tts_overrides: {},
-          notification_recipients: [],
           appliances: [],
         });
         this._collapsedRooms.add(`room-${this._config.rooms.length - 1}`);
@@ -853,35 +852,6 @@ class HomeWeatherPanel extends HTMLElement {
           this._collapsedAppliances.add(key);
         }
         this._render();
-      });
-    });
-
-    root.querySelectorAll("[data-action='add-notif-recipient']").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const roomIndex = parseInt(e.currentTarget.dataset.roomIndex, 10);
-        const rooms = this._config?.rooms || [];
-        const room = rooms[roomIndex];
-        if (!room) return;
-        room.notification_recipients = room.notification_recipients || [];
-        room.notification_recipients.push({ person: "", notify_entity: "" });
-        this._render();
-      });
-    });
-
-    root.querySelectorAll("[data-action='remove-notif-recipient']").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const row = e.target.closest(".notif-recipient-row");
-        if (!row) return;
-        const roomIndex = parseInt(row.dataset.roomIndex, 10);
-        const rooms = this._config?.rooms || [];
-        const room = rooms[roomIndex];
-        if (!room?.notification_recipients) return;
-        const idx = Array.from(row.parentElement.querySelectorAll(".notif-recipient-row")).indexOf(row);
-        if (idx >= 0) {
-          room.notification_recipients.splice(idx, 1);
-          this._render();
-        }
       });
     });
 
@@ -1487,6 +1457,14 @@ class HomeWeatherPanel extends HTMLElement {
     if (entityType === "media_player") {
       return (entities.media_players || []).map((e) => ({ entity_id: e.entity_id, friendly_name: e.friendly_name || e.entity_id }));
     }
+    if (entityType === "switch") {
+      return (entities.switch || []).map((e) => ({ entity_id: e.entity_id, friendly_name: e.friendly_name || e.entity_id }));
+    }
+    if (entityType === "sensor_switch") {
+      const sensors = (entities.sensors || []).map((e) => ({ entity_id: e.entity_id, friendly_name: e.friendly_name || e.entity_id }));
+      const switches = (entities.switch || []).map((e) => ({ entity_id: e.entity_id, friendly_name: e.friendly_name || e.entity_id }));
+      return [...sensors, ...switches];
+    }
     return [];
   }
 
@@ -1577,7 +1555,7 @@ class HomeWeatherPanel extends HTMLElement {
     }
     const ttsSettings = this._config?.tts_settings || {};
     const ttsMessages = ttsSettings.messages || {};
-    const entities = this._entities || { climate: [], sensors: [], persons: [], zones: [], media_players: [], weather: [], notify: [] };
+    const entities = this._entities || { climate: [], sensors: [], persons: [], zones: [], media_players: [], weather: [], notify: [], switch: [] };
 
     const settingsStyles = `
       .settings-tabs { display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap; }
@@ -1698,12 +1676,18 @@ class HomeWeatherPanel extends HTMLElement {
             <div class="settings-section">
               <h4 class="settings-section-title">Global settings</h4>
               <div class="form-group">
-                <label class="form-label">Notification prefix (title)</label>
-                <input type="text" class="form-input" id="notif-prefix" value="${this._escapeHtml((this._config?.notification_settings || {}).prefix || "Home Climate")}">
+                <label class="form-label" style="display:flex;align-items:center;gap:8px;">
+                  <input type="checkbox" id="notif-enabled" ${(this._config?.notification_settings || {}).enabled !== false ? "checked" : ""}>
+                  Enable notifications
+                </label>
               </div>
               <div class="form-group">
-                <label class="form-label">Default notify service (fallback when room has no recipients)</label>
-                ${this._renderEntityDropdown((this._config?.notification_settings || {}).default_notify_service || "", "notify", "notif_default_service", "Select notify entity")}
+                <label class="form-label">Notify entity</label>
+                ${this._renderEntityDropdown((this._config?.notification_settings || {}).notify_entity || (this._config?.notification_settings || {}).default_notify_service || "", "notify", "notif_entity", "Select notify entity")}
+              </div>
+              <div class="form-group">
+                <label class="form-label">Notification prefix (title)</label>
+                <input type="text" class="form-input" id="notif-prefix" value="${this._escapeHtml((this._config?.notification_settings || {}).prefix || "Home Climate")}">
               </div>
             </div>
             <div class="settings-section-divider"></div>
@@ -1779,19 +1763,6 @@ class HomeWeatherPanel extends HTMLElement {
             <label class="form-label">Volume (0-1)</label>
             <input type="number" class="form-input" data-field="volume" value="${room.volume ?? 0.7}" step="0.1" min="0" max="1">
           </div>
-          <div class="settings-section-divider"></div>
-          <h4 class="settings-section-title">Notification recipients (per-room)</h4>
-          <p class="form-label" style="margin-bottom:8px;opacity:0.8;">Person + notify entity for this room's notifications.</p>
-          <div id="notif-recipients-${index}" class="notif-recipients-list">
-            ${(room.notification_recipients || []).map((rec, ri) => `
-              <div class="notif-recipient-row" data-room-index="${index}" style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
-                ${this._renderEntityAutocomplete(rec.person || "", "person", "notif_person", "person")}
-                ${this._renderEntityDropdown(rec.notify_entity || "", "notify", "notif_entity", "notify entity")}
-                <button type="button" class="btn-delete" data-action="remove-notif-recipient">Remove</button>
-              </div>
-            `).join("")}
-          </div>
-          <button type="button" class="btn-add" data-action="add-notif-recipient" data-room-index="${index}">+ Add recipient</button>
         </div>
         <div class="settings-section-divider"></div>
         <div class="settings-section">
@@ -1877,25 +1848,6 @@ class HomeWeatherPanel extends HTMLElement {
           <label class="form-label">Cool above (°F)</label>
           <input type="number" class="form-input" data-field="cool_threshold_c" value="${this._cToF(auto.cool_threshold_c ?? this._fToC(79))}" step="0.5">
         </div>
-        <div class="form-group">
-          <label class="form-label">Seasonal mode</label>
-          <select class="form-select" data-field="seasonal_mode">
-            <option value="outdoor_temp" ${auto.seasonal_mode === "outdoor_temp" ? "selected" : ""}>Outdoor temperature</option>
-            <option value="date" ${auto.seasonal_mode === "date" ? "selected" : ""}>Date-based</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Outdoor temp sensor</label>
-          ${this._renderEntityAutocomplete(auto.outdoor_temp_sensor || "", "sensor_temp", "outdoor_temp_sensor", "e.g. sensor.outdoor_temp")}
-        </div>
-        <div class="form-group">
-          <label class="form-label">Winter start (MM-DD)</label>
-          <input type="text" class="form-input" data-field="date_winter_start" value="${auto.date_winter_start || "11-01"}">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Winter end (MM-DD)</label>
-          <input type="text" class="form-input" data-field="date_winter_end" value="${auto.date_winter_end || "03-31"}">
-        </div>
         </div>
         <div class="settings-section-divider"></div>
         <div class="settings-section">
@@ -1908,7 +1860,11 @@ class HomeWeatherPanel extends HTMLElement {
           </div>
           <div class="form-group">
             <label class="form-label">Power sensor</label>
-            ${this._renderEntityAutocomplete((app.power_sensor || {}).sensor || "", "sensor", "power_sensor_sensor", "e.g. sensor.power_consumption")}
+            ${this._renderEntityAutocomplete((app.power_sensor || {}).sensor || "", "sensor_switch", "power_sensor_sensor", "e.g. sensor.power_consumption")}
+          </div>
+          <div class="form-group">
+            <label class="form-label">Switch (for on/off when override active)</label>
+            ${this._renderEntityAutocomplete((app.power_sensor || {}).switch || "", "switch", "power_sensor_switch", "e.g. switch.hvac_power")}
           </div>
           <div class="form-group">
             <label class="form-label">Power threshold (W) – above = on</label>
@@ -1940,17 +1896,6 @@ class HomeWeatherPanel extends HTMLElement {
       const humidityEl = row.querySelector("[data-field='humidity_sensor']");
       const mediaEl = row.querySelector("[data-field='media_player']");
       const volumeEl = row.querySelector("[data-field='volume']");
-      const notifRecipientRows = row.querySelectorAll(".notif-recipient-row");
-      const notification_recipients = [];
-      notifRecipientRows.forEach((nrow) => {
-        const personInput = nrow.querySelector("[data-field='notif_person']");
-        const notifySelect = nrow.querySelector("[data-field='notif_entity']");
-        const person = (personInput?.value || "").trim();
-        const notify_entity = (notifySelect?.value || "").trim();
-        if (notify_entity) {
-          notification_recipients.push({ person: person || "", notify_entity });
-        }
-      });
 
       const appliances = [];
       const acards = root.querySelectorAll(`.appliance-card[data-room-index="${i}"]`);
@@ -1965,12 +1910,9 @@ class HomeWeatherPanel extends HTMLElement {
         const targetTempEl = acard.querySelector("[data-field='target_temp_on_enter']");
         const heatEl = acard.querySelector("[data-field='heat_threshold_c']");
         const coolEl = acard.querySelector("[data-field='cool_threshold_c']");
-        const seasonalEl = acard.querySelector("[data-field='seasonal_mode']");
-        const outdoorEl = acard.querySelector("[data-field='outdoor_temp_sensor']");
-        const winterStartEl = acard.querySelector("[data-field='date_winter_start']");
-        const winterEndEl = acard.querySelector("[data-field='date_winter_end']");
         const powerSensorEnabledEl = acard.querySelector("[data-field='power_sensor_enabled']");
         const powerSensorEl = acard.querySelector("[data-field='power_sensor_sensor']");
+        const powerSwitchEl = acard.querySelector("[data-field='power_sensor_switch']");
         const powerThresholdEl = acard.querySelector("[data-field='power_threshold_w']");
         const powerDebounceEl = acard.querySelector("[data-field='power_debounce_sec']");
 
@@ -1983,6 +1925,7 @@ class HomeWeatherPanel extends HTMLElement {
           ? {
               enabled: true,
               sensor: (powerSensorEl?.value || "").trim(),
+              switch: (powerSwitchEl?.value || "").trim(),
               power_threshold_w: parseFloat(powerThresholdEl?.value) || 10,
               debounce_sec: Math.max(1, Math.min(60, parseInt(powerDebounceEl?.value, 10) || 5)),
             }
@@ -2001,10 +1944,10 @@ class HomeWeatherPanel extends HTMLElement {
             target_temp_on_enter: parseFloat(targetTempEl?.value) || 22,
             heat_threshold_c: parseFloat(heatEl?.value) || 18,
             cool_threshold_c: parseFloat(coolEl?.value) || 26,
-            seasonal_mode: seasonalEl?.value || "outdoor_temp",
-            outdoor_temp_sensor: (outdoorEl?.value || "").trim(),
-            date_winter_start: (winterStartEl?.value || "11-01").trim(),
-            date_winter_end: (winterEndEl?.value || "03-31").trim(),
+            seasonal_mode: "outdoor_temp",
+            outdoor_temp_sensor: "",
+            date_winter_start: "11-01",
+            date_winter_end: "03-31",
           },
           power_sensor: powerSensor,
         });
@@ -2018,7 +1961,6 @@ class HomeWeatherPanel extends HTMLElement {
         media_player: (mediaEl?.value || "").trim() || "",
         volume: parseFloat(volumeEl?.value) || 0.7,
         tts_overrides: {},
-        notification_recipients,
         appliances,
       });
     }
@@ -2047,11 +1989,13 @@ class HomeWeatherPanel extends HTMLElement {
     });
 
     const notifPrefixEl = root.querySelector("#notif-prefix");
-    const notifDefaultEl = root.querySelector("[data-field='notif_default_service']");
+    const notifEnabledEl = root.querySelector("#notif-enabled");
+    const notifEntityEl = root.querySelector("[data-field='notif_entity']");
     config.notification_settings = {
       ...(config.notification_settings || {}),
+      enabled: notifEnabledEl?.checked !== false,
+      notify_entity: (notifEntityEl?.value || "").trim(),
       prefix: notifPrefixEl?.value || "Home Climate",
-      default_notify_service: (notifDefaultEl?.value || "").trim(),
       messages: config.notification_settings?.messages || {},
     };
     ttsEventKeys.forEach((key) => {

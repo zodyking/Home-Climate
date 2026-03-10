@@ -133,8 +133,9 @@ DEFAULT_CONFIG = {
     "rooms": [],
     "weather_entity": "",
     "notification_settings": {
+        "enabled": True,
+        "notify_entity": "",
         "prefix": DEFAULT_NOTIFICATION_PREFIX,
-        "default_notify_service": "",
         "messages": _default_notification_messages(),
     },
     "tts_settings": {
