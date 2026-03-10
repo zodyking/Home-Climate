@@ -148,6 +148,13 @@ async def websocket_get_entities(
                     "friendly_name": friendly_name,
                 })
 
+        if entity_type is None or entity_type == "weather":
+            if entity_id.startswith("weather."):
+                result["weather"].append({
+                    "entity_id": entity_id,
+                    "friendly_name": friendly_name,
+                })
+
     connection.send_result(msg["id"], result)
 
 
@@ -251,11 +258,34 @@ async def websocket_get_dashboard_data(
     """Get dashboard data: nested rooms with appliances (parent room + appliance sub-cards)."""
     config_manager = hass.data.get(DOMAIN, {}).get("config_manager")
     if not config_manager:
-        connection.send_result(msg["id"], {"rooms": []})
+        connection.send_result(msg["id"], {"rooms": [], "outdoor": {"temp": None, "humidity": None}, "indoor_aggregate": {"temp": None, "humidity": None, "room_count": 0}})
         return
 
     rooms_data = []
     temp_unit = hass.config.units.temperature_unit
+
+    # Outdoor from weather entity
+    outdoor_temp = None
+    outdoor_humidity = None
+    weather_entity = (config_manager.config.get("weather_entity") or "").strip()
+    if weather_entity:
+        wstate = hass.states.get(weather_entity)
+        if wstate and wstate.state not in ("unknown", "unavailable"):
+            attrs = wstate.attributes or {}
+            t = attrs.get("temperature")
+            if t is not None:
+                try:
+                    outdoor_temp = float(t)
+                    if temp_unit == "°F":
+                        outdoor_temp = (outdoor_temp - 32) * 5 / 9
+                except (ValueError, TypeError):
+                    pass
+            h = attrs.get("humidity")
+            if h is not None:
+                try:
+                    outdoor_humidity = float(h)
+                except (ValueError, TypeError):
+                    pass
 
     for room in config_manager.rooms:
         temp = None
@@ -320,7 +350,28 @@ async def websocket_get_dashboard_data(
             "appliances": appliances_data,
         })
 
-    connection.send_result(msg["id"], {"rooms": rooms_data})
+    # Indoor aggregate: average temp (C) and humidity across rooms with data
+    def _to_celsius(val: float, unit: str) -> float:
+        if unit == "°F":
+            return (val - 32) * 5 / 9
+        return val
+
+    temps_c = []
+    for r in rooms_data:
+        if r["temp"] is not None:
+            temps_c.append(_to_celsius(r["temp"], temp_unit))
+    humids = [r["humidity"] for r in rooms_data if r["humidity"] is not None]
+    indoor_aggregate = {
+        "temp": sum(temps_c) / len(temps_c) if temps_c else None,
+        "humidity": sum(humids) / len(humids) if humids else None,
+        "room_count": len([r for r in rooms_data if r["temp"] is not None or r["humidity"] is not None]),
+    }
+
+    connection.send_result(msg["id"], {
+        "rooms": rooms_data,
+        "outdoor": {"temp": outdoor_temp, "humidity": outdoor_humidity},
+        "indoor_aggregate": indoor_aggregate,
+    })
 
 
 @websocket_api.websocket_command(
@@ -361,6 +412,16 @@ async def websocket_set_climate_and_announce(
             )
             tts_event = TTS_MANUAL_ON
         else:
+            if hvac_mode and hvac_mode.lower() != "off":
+                state = hass.states.get(entity_id)
+                current_state = (state.state if state else "").lower()
+                if current_state == "off":
+                    await hass.services.async_call(
+                        "climate",
+                        "turn_on",
+                        {ATTR_ENTITY_ID: entity_id},
+                        blocking=True,
+                    )
             await hass.services.async_call(
                 "climate",
                 "set_hvac_mode",

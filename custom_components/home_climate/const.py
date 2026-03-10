@@ -113,6 +113,7 @@ def default_appliance_automation() -> dict:
 # Default config structure (new schema)
 DEFAULT_CONFIG = {
     "rooms": [],
+    "weather_entity": "",
     "tts_settings": {
         "language": DEFAULT_TTS_LANGUAGE,
         "speed": DEFAULT_TTS_SPEED,

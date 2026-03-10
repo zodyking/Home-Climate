@@ -36,6 +36,32 @@ def _parse_temp(value: Any, unit: str | None) -> float | None:
     return temp
 
 
+def _get_outdoor_temp_c(
+    hass: "HomeAssistant",
+    config: dict[str, Any],
+    appliance_auto: dict[str, Any],
+) -> float | None:
+    """Get outdoor temperature in Celsius from weather entity (preferred) or sensor."""
+    # Prefer global weather entity
+    weather_entity = (config.get("weather_entity") or "").strip()
+    if weather_entity:
+        wstate = hass.states.get(weather_entity)
+        if wstate and wstate.state not in ("unknown", "unavailable"):
+            attrs = wstate.attributes or {}
+            t = attrs.get("temperature")
+            if t is not None:
+                temp_unit = hass.config.units.temperature_unit
+                return _parse_temp(t, temp_unit)
+    # Fall back to per-appliance outdoor_temp_sensor
+    outdoor_sensor = (appliance_auto.get("outdoor_temp_sensor") or "").strip()
+    if outdoor_sensor:
+        ostate = hass.states.get(outdoor_sensor)
+        if ostate and ostate.state not in ("unknown", "unavailable"):
+            ounit = ostate.attributes.get("unit_of_measurement")
+            return _parse_temp(ostate.state, ounit)
+    return None
+
+
 def _is_winter_date(winter_start: str, winter_end: str) -> bool:
     """Return True if today is in winter range (e.g. 11-01 to 03-31)."""
     try:
@@ -112,18 +138,16 @@ class ClimateMonitor:
                 heat_threshold = float(auto.get("heat_threshold_c", 18))
                 cool_threshold = float(auto.get("cool_threshold_c", 26))
                 seasonal_mode = auto.get("seasonal_mode", SEASONAL_MODE_OUTDOOR_TEMP)
-                outdoor_sensor = (auto.get("outdoor_temp_sensor") or "").strip()
                 cool_only_above = float(auto.get("outdoor_cool_only_above_c", 25))
                 heat_only_below = float(auto.get("outdoor_heat_only_below_c", 15))
                 winter_start = (auto.get("date_winter_start") or "11-01").strip()
                 winter_end = (auto.get("date_winter_end") or "03-31").strip()
 
-                outdoor_temp: float | None = None
-                if outdoor_sensor:
-                    ostate = self.hass.states.get(outdoor_sensor)
-                    if ostate and ostate.state not in ("unknown", "unavailable"):
-                        ounit = ostate.attributes.get("unit_of_measurement")
-                        outdoor_temp = _parse_temp(ostate.state, ounit)
+                outdoor_temp = _get_outdoor_temp_c(
+                    self.hass,
+                    config_manager.config,
+                    auto,
+                )
 
                 heat_allowed = True
                 cool_allowed = True

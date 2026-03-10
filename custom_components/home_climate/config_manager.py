@@ -245,6 +245,9 @@ class ConfigManager:
         if "rooms" in loaded and isinstance(loaded["rooms"], list):
             result["rooms"] = self._validate_rooms(loaded["rooms"])
 
+        if "weather_entity" in loaded and isinstance(loaded["weather_entity"], str):
+            result["weather_entity"] = loaded["weather_entity"].strip()
+
         if "tts_settings" in loaded and isinstance(loaded["tts_settings"], dict):
             result["tts_settings"] = self._validate_tts_settings(loaded["tts_settings"])
 
@@ -337,6 +340,8 @@ class ConfigManager:
         """Update full configuration with validation."""
         if "rooms" in new_config:
             self._config["rooms"] = self._validate_rooms(new_config["rooms"])
+        if "weather_entity" in new_config:
+            self._config["weather_entity"] = str(new_config["weather_entity"] or "").strip()
         if "tts_settings" in new_config:
             self._config["tts_settings"] = self._validate_tts_settings(
                 new_config["tts_settings"]
