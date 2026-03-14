@@ -817,7 +817,7 @@ class HomeWeatherPanel extends HTMLElement {
     const indoor = newData.indoor_aggregate || { temp: null, humidity: null };
     const outdoorTemp = outdoor.temp != null ? this._cToF(outdoor.temp).toFixed(1) : "—";
     const outdoorHum = outdoor.humidity != null ? outdoor.humidity.toFixed(0) : "—";
-    const indoorTemp = indoor.temp != null ? this._cToF(indoor.temp).toFixed(1) : "—";
+    const indoorTemp = indoor.temp != null ? (indoor.temp * 9/5 + 32).toFixed(1) : "—";
     const indoorHum = indoor.humidity != null ? indoor.humidity.toFixed(0) : "—";
     const unit = DISPLAY_UNIT;
     const thermalDelta = (indoor.temp != null && outdoor.temp != null) ? Math.round(Math.abs(this._cToF(indoor.temp) - this._cToF(outdoor.temp))) : "—";
@@ -864,7 +864,7 @@ class HomeWeatherPanel extends HTMLElement {
 
       const statValues = roomCard.querySelectorAll(".room-stat-value");
       if (statValues.length >= 2) {
-        statValues[0].textContent = room.temp != null ? room.temp.toFixed(1) : "—";
+        statValues[0].textContent = room.temp != null ? Math.round(room.temp) : "—";
         statValues[1].textContent = room.humidity != null ? room.humidity.toFixed(0) : "—";
       }
 
@@ -879,7 +879,7 @@ class HomeWeatherPanel extends HTMLElement {
         const fanMode = app.fan_mode || "";
         const fanModes = app.fan_modes || [];
         const appUnit = DISPLAY_UNIT;
-        const roomTemp = app.temp != null ? app.temp.toFixed(1) : "—";
+        const roomTemp = app.temp != null ? Math.round(app.temp) : "—";
         const isFanOnly = mode === "fan_only";
         const targetDisplay = isFanOnly ? "—" : `${app.target_temp != null ? Math.round(app.target_temp) : "—"}${appUnit}`;
 
@@ -1190,7 +1190,7 @@ class HomeWeatherPanel extends HTMLElement {
     const humidityIcon = `<svg class="stat-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`;
     const outdoorTemp = outdoor.temp != null ? this._cToF(outdoor.temp).toFixed(1) : "—";
     const outdoorHum = outdoor.humidity != null ? outdoor.humidity.toFixed(0) : "—";
-    const indoorTemp = indoor.temp != null ? this._cToF(indoor.temp).toFixed(1) : "—";
+    const indoorTemp = indoor.temp != null ? (indoor.temp * 9/5 + 32).toFixed(1) : "—";
     const indoorHum = indoor.humidity != null ? indoor.humidity.toFixed(0) : "—";
 
     if (rooms.length === 0) {
@@ -1324,7 +1324,7 @@ class HomeWeatherPanel extends HTMLElement {
   }
 
   _renderRoomParentCard(room) {
-    const temp = room.temp != null ? room.temp.toFixed(1) : "—";
+    const temp = room.temp != null ? Math.round(room.temp) : "—";
     const humidity = room.humidity != null ? room.humidity.toFixed(0) : "—";
     const roomName = room.name || "Room";
     const unit = DISPLAY_UNIT;
@@ -1580,7 +1580,7 @@ class HomeWeatherPanel extends HTMLElement {
     const range = maxT - minT || 1;
     const norm = isFanOnly ? 0 : Math.max(0, Math.min(1, (target - minT) / range));
     const unit = DISPLAY_UNIT;
-    const roomTemp = room.temp != null ? room.temp.toFixed(1) : "—";
+    const roomTemp = room.temp != null ? Math.round(room.temp) : "—";
     const targetDisplay = isFanOnly ? "—" : `${target}${unit}`;
 
     const r = 45;
@@ -1616,7 +1616,7 @@ class HomeWeatherPanel extends HTMLElement {
   }
 
   _renderRoomCard(room, asSubCard = false, isSmart = true) {
-    const temp = room.temp != null ? room.temp.toFixed(1) : "—";
+    const temp = room.temp != null ? Math.round(room.temp) : "—";
     const humidity = room.humidity != null ? room.humidity.toFixed(0) : "—";
     const mode = (room.climate_mode || room.climate_state || "off").toLowerCase();
     const hvacAction = room.hvac_action || null;
