@@ -111,7 +111,7 @@ const STYLES = `
     flex: 1;
   }
   .main .overview { grid-column: 1; grid-row: 1; }
-  .main .zones { grid-column: 1; grid-row: 2; }
+  .main .zones { grid-column: 1; grid-row: 2; min-height: 200px; }
   .main .thermostat { grid-column: 2; grid-row: 1; }
   .main .systems { grid-column: 2; grid-row: 2; }
   .card { background: var(--panel); border: 1px solid var(--line); clip-path: var(--cut); box-shadow: var(--shadow); position: relative; overflow: hidden; }
@@ -556,6 +556,82 @@ const STYLES = `
     stroke: currentColor;
     stroke-width: 1.2;
   }
+  .zones-grid {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    align-content: start;
+  }
+  .zone-card {
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    clip-path: var(--cut);
+    padding: 12px;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+  }
+  .zone-card::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 10px;
+    bottom: 10px;
+    width: 3px;
+    background: var(--ha-blue);
+  }
+  .zone-top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+  .zone-name { font-size: 14px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.2; }
+  .zone-tag { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.14em; white-space: nowrap; }
+  .zone-temp { margin-top: 12px; display: flex; align-items: flex-end; gap: 5px; }
+  .zone-temp .value { font-size: 40px; line-height: 0.9; font-weight: 900; letter-spacing: -0.06em; }
+  .zone-temp .unit { margin-bottom: 4px; font-size: 14px; font-weight: 700; color: var(--ha-blue-soft); }
+  .zone-meta { margin-top: 8px; display: flex; justify-content: space-between; gap: 10px; font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .zone-bar { margin-top: 10px; height: 6px; background: #0d1218; border: 1px solid rgba(255,255,255,0.03); clip-path: var(--cut-sm); overflow: hidden; }
+  .zone-bar span { display: block; height: 100%; background: var(--ha-blue); }
+  .thermo-grid { flex: 1; min-height: 0; display: grid; grid-template-rows: auto auto auto 1fr; gap: 12px; }
+  .setting-row { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 10px; }
+  .setting-box { border: 1px solid var(--line); background: var(--panel-2); clip-path: var(--cut); padding: 12px 14px; min-height: 88px; }
+  .setting-box .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.16em; }
+  .setting-box .value { margin-top: 8px; font-size: 30px; font-weight: 900; letter-spacing: -0.05em; white-space: nowrap; }
+  .setting-box .sub { margin-top: 5px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .setpoint-row { display: grid; grid-template-columns: 48px 1fr 48px; gap: 10px; align-items: stretch; }
+  .step-btn { font-size: 24px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); clip-path: var(--cut-sm); cursor: pointer; transition: 0.16s ease; }
+  .step-btn:hover { border-color: var(--line-2); background: var(--panel-3); }
+  .setpoint-box { border: 1px solid var(--line); background: var(--panel-2); clip-path: var(--cut); display: flex; align-items: center; justify-content: center; flex-direction: column; min-height: 88px; }
+  .setpoint-box .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.16em; }
+  .setpoint-box .value { margin-top: 6px; font-size: 42px; font-weight: 900; letter-spacing: -0.06em; }
+  .mode-grid, .fan-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .mode-btn, .fan-btn { height: 40px; font-size: 11px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); clip-path: var(--cut-sm); cursor: pointer; transition: 0.16s ease; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; }
+  .mode-btn:hover, .fan-btn:hover { border-color: var(--line-2); color: var(--text); }
+  .mode-btn.active, .fan-btn.active { background: var(--ha-blue); border-color: var(--ha-blue); color: var(--bg); }
+  .slider-box { border: 1px solid var(--line); background: var(--panel-2); clip-path: var(--cut); padding: 12px 14px; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+  .slider-box .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.16em; }
+  .slider-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .slider-head .value { font-size: 18px; font-weight: 900; color: var(--ha-blue-soft); white-space: nowrap; }
+  input[type="range"], .fan-slider { width: 100%; height: 8px; appearance: none; background: #0d1218; border: 1px solid rgba(255,255,255,0.03); clip-path: var(--cut-sm); outline: none; }
+  input[type="range"]::-webkit-slider-thumb, .fan-slider::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; background: var(--ha-blue-soft); border: 2px solid var(--ha-blue); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); cursor: pointer; }
+  input[type="range"]::-moz-range-thumb, .fan-slider::-moz-range-thumb { width: 14px; height: 14px; background: var(--ha-blue-soft); border: 2px solid var(--ha-blue); border-radius: 0; cursor: pointer; }
+  .systems-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; flex: 1; min-height: 0; align-content: start; }
+  .stack { display: grid; gap: 10px; min-height: 0; }
+  .data-item { border: 1px solid var(--line); background: var(--panel-2); clip-path: var(--cut); padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 58px; font-size: 12px; color: var(--muted); }
+  .data-item span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .data-item strong { font-size: 14px; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; color: var(--text); }
+  .data-item .ok { color: var(--good); }
+  .data-item .warn { color: var(--warn); }
+  .data-item .blue { color: var(--ha-blue-soft); }
+  .footer-label { position: absolute; right: 24px; bottom: 18px; font-size: 11px; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; }
+  @media (max-width: 1450px) {
+    .zones-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 1180px) {
+    .zones-grid { grid-template-columns: repeat(2, 1fr); }
+  }
 `;
 
 class HomeWeatherPanel extends HTMLElement {
@@ -978,6 +1054,7 @@ class HomeWeatherPanel extends HTMLElement {
         ${this._loading ? '<div class="loading"><div class="loading-spinner" aria-hidden="true"></div>Loading...</div>' : ""}
         ${this._error ? `<div class="error">${this._escapeHtml(this._error)}</div>` : ""}
 
+        ${!this._loading && !this._error && !this._showSettings ? '<div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>' : ""}
         ${!this._loading && !this._error && this._showSettings ? this._renderSettings() : ""}
         ${!this._loading && !this._error && !this._showSettings ? this._renderDashboard() : ""}
       </div>
@@ -1018,9 +1095,11 @@ class HomeWeatherPanel extends HTMLElement {
     }
 
     const primary = this._getPrimaryAppliance(data);
-    const ambientTemp = indoor.temp != null ? Math.round(this._cToF(indoor.temp)) : (rooms[0]?.temp != null ? Math.round(rooms[0].temp) : "—");
+    const tempUnit = rooms[0]?.temperature_unit || "°F";
+    const ambientTemp = indoor.temp != null ? Math.round(this._cToF(indoor.temp)) : (rooms[0]?.temp != null ? Math.round(tempUnit === "°C" ? this._cToF(rooms[0].temp) : rooms[0].temp) : "—");
     const thermalDelta = (indoor.temp != null && outdoor.temp != null) ? Math.round(Math.abs(this._cToF(indoor.temp) - this._cToF(outdoor.temp))) : "—";
-    const setpoint = primary ? (primary.target_temp != null ? Math.round(primary.target_temp) : "—") : "—";
+    const setpointRaw = primary?.target_temp;
+    const setpoint = primary && setpointRaw != null ? Math.round(tempUnit === "°C" ? this._cToF(setpointRaw) : setpointRaw) : "—";
     const modeLabel = primary ? this._modeLabel((primary.climate_mode || primary.climate_state || "off").toLowerCase()) : "—";
     const hvacAction = primary?.hvac_action || null;
     const compressorLabel = hvacAction && ["heating", "cooling"].includes(hvacAction) ? "Active" : (hvacAction === "idle" ? "Idle" : "—");
@@ -1094,7 +1173,7 @@ class HomeWeatherPanel extends HTMLElement {
               </div>
               <div class="mini-badge">HVAC</div>
             </div>
-            ${primary ? this._renderThermostatCard(primary) : '<div class="empty-state" style="padding:24px;"><p>No climate appliance configured.</p><p>Add rooms and appliances in Settings.</p></div>'}
+            ${primary ? this._renderThermostatCard(primary, tempUnit) : '<div class="empty-state" style="padding:24px;"><p>No climate appliance configured.</p><p>Add rooms and appliances in Settings.</p></div>'}
           </div>
         </section>
         <section class="card zones">
@@ -1106,7 +1185,7 @@ class HomeWeatherPanel extends HTMLElement {
               </div>
             </div>
             <div class="zones-grid" id="roomsGrid">
-              ${rooms.map((r) => this._renderZoneCard(r)).join("")}
+              ${rooms.map((r) => this._renderZoneCard(r, primary?.target_temp != null ? (data.rooms?.[0]?.temperature_unit === "°C" ? this._cToF(primary.target_temp) : primary.target_temp) : null)).join("")}
             </div>
           </div>
         </section>
@@ -1232,6 +1311,24 @@ class HomeWeatherPanel extends HTMLElement {
     return Math.round((c * 9 / 5 + 32) * 2) / 2;
   }
 
+  _fanSpeedDisplay(fanMode, fanPct) {
+    if (fanPct != null && typeof fanPct === "number" && !isNaN(fanPct)) return `${Math.round(fanPct)}%`;
+    const m = (fanMode || "").toLowerCase();
+    const map = { auto: "—", low: "25%", medium: "50%", med: "50%", high: "100%" };
+    return map[m] || "—";
+  }
+
+  _fanSpeedValue(fanMode, fanPct) {
+    if (fanPct != null && typeof fanPct === "number" && !isNaN(fanPct)) return Math.max(0, Math.min(100, Math.round(fanPct)));
+    const m = (fanMode || "").toLowerCase();
+    const map = { auto: 62, low: 25, medium: 50, med: 50, high: 100 };
+    return map[m] ?? 62;
+  }
+
+  _fanDisplayLabel(fm) {
+    return (fm || "") === "Medium" ? "Med" : (fm || "");
+  }
+
   _fToC(f) {
     return (f - 32) * 5 / 9;
   }
@@ -1246,16 +1343,31 @@ class HomeWeatherPanel extends HTMLElement {
     return null;
   }
 
-  _renderZoneCard(room) {
-    const temp = room.temp != null ? Math.round(room.temp) : "—";
+  _renderZoneCard(room, primarySetpoint) {
+    const tempUnit = room.temperature_unit || "°F";
+    const rawTemp = room.temp;
+    const tempF = rawTemp != null ? (tempUnit === "°C" ? this._cToF(rawTemp) : rawTemp) : null;
+    const temp = tempF != null ? Math.round(tempF) : "—";
     const humidity = room.humidity != null ? room.humidity.toFixed(0) : "—";
     const roomName = room.name || "Room";
     const unit = DISPLAY_UNIT;
     const firstApp = (room.appliances || [])[0];
     const hvacAction = firstApp?.hvac_action;
-    const tag = hvacAction === "heating" ? "Heating" : hvacAction === "cooling" ? "Cooling" : "Stable";
+    const setpoint = primarySetpoint != null ? (typeof primarySetpoint === "number" ? primarySetpoint : this._cToF(primarySetpoint)) : null;
+    let tag = "Stable";
+    if (hvacAction === "heating") tag = "Heating";
+    else if (hvacAction === "cooling") tag = "Cooling";
+    else if (typeof tempF === "number" && setpoint != null) {
+      const delta = tempF - setpoint;
+      if (delta > 1.5) tag = "Warm";
+      else if (delta < -1.5) tag = "Cool";
+      else if (Math.abs(delta) <= 1) tag = "Balanced";
+    }
+    const hum = parseFloat(humidity);
+    if (tag === "Stable" && !isNaN(hum) && hum < 35) tag = "Dry";
+    const status = "steady";
     const minT = 55, maxT = 90;
-    const barPct = typeof temp === "number" ? Math.max(0, Math.min(100, ((temp - minT) / (maxT - minT)) * 100)) : 70;
+    const barPct = typeof tempF === "number" ? Math.max(0, Math.min(100, ((tempF - minT) / (maxT - minT)) * 100)) : 70;
     return `
       <div class="zone-card" data-room-id="${this._escapeHtml(room.id || "")}">
         <div>
@@ -1264,17 +1376,22 @@ class HomeWeatherPanel extends HTMLElement {
             <div class="zone-tag">${tag}</div>
           </div>
           <div class="zone-temp"><div class="value">${temp}</div><div class="unit">${unit}</div></div>
-          <div class="zone-meta"><span>${humidity}% humidity</span><span>steady</span></div>
+          <div class="zone-meta"><span>${humidity}% humidity</span> <span>${status}</span></div>
         </div>
         <div class="zone-bar"><span style="width:${barPct}%"></span></div>
       </div>
     `;
   }
 
-  _renderThermostatCard(primary) {
+  _renderThermostatCard(primary, tempUnit = "°F") {
     const mode = (primary.climate_mode || primary.climate_state || "off").toLowerCase();
     const fanMode = primary.fan_mode || "Auto";
-    const target = primary.target_temp != null ? Math.round(primary.target_temp) : 70;
+    const fanPct = primary.percentage;
+    const fanSpeedDisplay = this._fanSpeedDisplay(fanMode, fanPct);
+    const fanSpeedVal = this._fanSpeedValue(fanMode, fanPct);
+    const hasFanPct = fanPct != null && typeof fanPct === "number" && !isNaN(fanPct);
+    const targetRaw = primary.target_temp;
+    const target = targetRaw != null ? Math.round(tempUnit === "°C" ? this._cToF(targetRaw) : targetRaw) : 70;
     const minT = primary.min_temp ?? 16;
     const maxT = primary.max_temp ?? 30;
     const hvacModes = primary.hvac_modes || [];
@@ -1283,9 +1400,15 @@ class HomeWeatherPanel extends HTMLElement {
     const entity = this._escapeHtml(primary.control_entity || primary.climate_entity || "");
     const roomName = this._escapeHtml(primary._roomNameForTts || "Room");
     const modeMap = { cool: "Cool", heat: "Heat", dry: "Dry", fan_only: "Fan" };
-    const modesForUi = ["Cool", "Heat", "Auto", "Dry"].filter((m) => allowedModes.some((a) => modeMap[a] === m || a === m.toLowerCase()));
+    const modesForUi = ["Cool", "Heat", "Auto", "Dry"].filter((m) => {
+      if (m === "Auto") {
+        const lower = (hvacModes || []).map((x) => (x || "").toLowerCase());
+        return lower.includes("heat_cool") || lower.includes("auto");
+      }
+      return allowedModes.some((a) => modeMap[a] === m || a === m.toLowerCase());
+    });
     return `
-      <div class="thermo-grid" data-primary-entity="${entity}" data-room-name="${roomName}" data-min="${minT}" data-max="${maxT}">
+      <div class="thermo-grid" data-primary-entity="${entity}" data-room-name="${roomName}" data-min="${minT}" data-max="${maxT}" data-has-fan-pct="${hasFanPct}">
         <div class="setting-row">
           <div class="setting-box">
             <div class="label">Current Mode</div>
@@ -1294,7 +1417,7 @@ class HomeWeatherPanel extends HTMLElement {
           </div>
           <div class="setting-box">
             <div class="label">Fan Speed</div>
-            <div class="value" id="fanSpeedValue">${fanMode}</div>
+            <div class="value" id="fanSpeedValue">${fanSpeedDisplay}</div>
             <div class="sub">Live airflow output</div>
           </div>
         </div>
@@ -1308,7 +1431,7 @@ class HomeWeatherPanel extends HTMLElement {
         </div>
         <div class="mode-grid" id="modeGrid">
           ${modesForUi.map((m) => {
-            const dm = m.toLowerCase();
+            const dm = m === "Auto" ? "heat_cool" : m.toLowerCase();
             const active = mode === dm || (m === "Auto" && mode === "heat_cool");
             return `<button class="mode-btn ${active ? "active" : ""}" data-mode="${dm}" data-entity="${entity}" data-room-name="${roomName}">${m}</button>`;
           }).join("")}
@@ -1316,11 +1439,12 @@ class HomeWeatherPanel extends HTMLElement {
         <div class="slider-box">
           <div class="slider-head">
             <div class="label">Fan Control</div>
-            <div class="value" id="fanLabel">${fanMode}</div>
+            <div class="value" id="fanLabel">${fanMode} • ${fanSpeedDisplay}</div>
           </div>
           <div class="fan-grid" id="fanGrid">
-            ${(fanModes.slice(0, 4)).map((fm) => `<button class="fan-btn ${(fanMode || "").toLowerCase() === (fm || "").toLowerCase() ? "active" : ""}" data-fan="${this._escapeHtml(fm)}" data-entity="${entity}">${this._escapeHtml(fm)}</button>`).join("")}
+            ${(fanModes.slice(0, 4)).map((fm) => `<button class="fan-btn ${(fanMode || "").toLowerCase() === (fm || "").toLowerCase() ? "active" : ""}" data-fan="${this._escapeHtml(fm)}" data-entity="${entity}">${this._fanDisplayLabel(fm)}</button>`).join("")}
           </div>
+          <input class="fan-slider" type="range" min="0" max="100" value="${fanSpeedVal}" ${hasFanPct ? "" : "disabled"} data-entity="${entity}" aria-label="Fan speed" />
         </div>
       </div>
     `;
@@ -1538,103 +1662,6 @@ class HomeWeatherPanel extends HTMLElement {
         const action = e.currentTarget.dataset.action;
         const roomName = e.currentTarget.dataset.roomName || "Room";
         const hvacMode = (e.currentTarget.dataset.hvacMode || "").toLowerCase();
-        const thermoGrid = btn.closest(".thermo-grid");
-        const minT = thermoGrid ? parseFloat(thermoGrid.dataset.min) || 16 : 16;
-        const maxT = thermoGrid ? parseFloat(thermoGrid.dataset.max) || 30 : 30;
-        const setpointEl = root.querySelector("#setpointValue");
-        const target = setpointEl ? parseFloat(setpointEl.textContent) || 70 : 70;
-        if (!entity) return;
-        let newTarget = target;
-        if (action === "temp-down") newTarget = Math.max(minT, target - 1);
-        else if (action === "temp-up") newTarget = Math.min(maxT, target + 1);
-        this._setTemperature(entity, newTarget, roomName, hvacMode);
-      });
-    });
-    root.querySelectorAll(".mode-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const entity = e.currentTarget.dataset.entity;
-        const mode = e.currentTarget.dataset.mode;
-        const roomName = e.currentTarget.dataset.roomName || "Room";
-        if (!entity || !mode) return;
-        if (mode === "off") {
-          this._setClimateAndAnnounce(entity, "turn_off", "off", roomName);
-        } else {
-          const haMode = mode === "auto" ? "heat_cool" : mode;
-          this._setClimateAndAnnounce(entity, "set_hvac_mode", haMode, roomName);
-        }
-      });
-    });
-    root.querySelectorAll(".fan-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const entity = e.currentTarget.dataset.entity;
-        const fanMode = e.currentTarget.dataset.fan;
-        if (!entity || !fanMode) return;
-        this._setFanMode(entity, fanMode);
-      });
-    });
-  }
-
-  _bindThermostatControls(root) {
-    if (!root) return;
-    root.querySelectorAll(".step-btn[data-action='temp-down']").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const entity = btn.dataset.entity;
-        const roomName = btn.dataset.roomName || "Room";
-        const hvacMode = (btn.dataset.hvacMode || "").toLowerCase();
-        if (!entity) return;
-        const thermo = btn.closest(".thermo-grid");
-        const minT = parseFloat(thermo?.dataset.min) || 16;
-        const maxT = parseFloat(thermo?.dataset.max) || 30;
-        const setpointEl = root.querySelector("#setpointValue");
-        let target = setpointEl ? parseFloat(setpointEl.textContent) : (minT + maxT) / 2;
-        if (isNaN(target)) target = 70;
-        target = Math.max(this._cToF(minT), target - 1);
-        this._setTemperature(entity, this._fToC(target), roomName, hvacMode);
-      });
-    });
-    root.querySelectorAll(".step-btn[data-action='temp-up']").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const entity = btn.dataset.entity;
-        const roomName = btn.dataset.roomName || "Room";
-        const hvacMode = (btn.dataset.hvacMode || "").toLowerCase();
-        if (!entity) return;
-        const thermo = btn.closest(".thermo-grid");
-        const minT = parseFloat(thermo?.dataset.min) || 16;
-        const maxT = parseFloat(thermo?.dataset.max) || 30;
-        const setpointEl = root.querySelector("#setpointValue");
-        let target = setpointEl ? parseFloat(setpointEl.textContent) : (minT + maxT) / 2;
-        if (isNaN(target)) target = 70;
-        target = Math.min(this._cToF(maxT), target + 1);
-        this._setTemperature(entity, this._fToC(target), roomName, hvacMode);
-      });
-    });
-    root.querySelectorAll(".mode-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const entity = btn.dataset.entity;
-        const roomName = btn.dataset.roomName || "Room";
-        const mode = btn.dataset.mode;
-        if (!entity || !mode) return;
-        this._setClimateAndAnnounce(entity, "set_hvac_mode", mode, roomName);
-      });
-    });
-    root.querySelectorAll(".fan-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const entity = btn.dataset.entity;
-        const fan = btn.dataset.fan;
-        if (!entity || !fan) return;
-        this._setFanMode(entity, fan);
-      });
-    });
-  }
-
-  _bindThermostatControls(root) {
-    if (!root) return;
-    root.querySelectorAll(".step-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const entity = e.currentTarget.dataset.entity;
-        const action = e.currentTarget.dataset.action;
-        const roomName = e.currentTarget.dataset.roomName || "Room";
-        const hvacMode = (e.currentTarget.dataset.hvacMode || "").toLowerCase();
         if (!entity) return;
         const thermo = root.querySelector(".thermo-grid[data-primary-entity]");
         const minT = thermo ? parseFloat(thermo.dataset.min) || 16 : 16;
@@ -1656,290 +1683,8 @@ class HomeWeatherPanel extends HTMLElement {
         if (mode === "off") {
           this._setClimateAndAnnounce(entity, "turn_off", "off", roomName);
         } else {
-          this._setClimateAndAnnounce(entity, "set_hvac_mode", mode, roomName);
-        }
-      });
-    });
-    root.querySelectorAll(".fan-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const entity = e.currentTarget.dataset.entity;
-        const fan = e.currentTarget.dataset.fan;
-        if (!entity || !fan) return;
-        this._setFanMode(entity, fan);
-      });
-    });
-  }
-
-  _bindThermostatControls(root) {
-    if (!root) return;
-    root.querySelectorAll(".step-btn[data-action='temp-down']").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const entity = btn.dataset.entity;
-        const roomName = btn.dataset.roomName || "Room";
-        const hvacMode = (btn.dataset.hvacMode || "").toLowerCase();
-        const grid = btn.closest(".thermo-grid");
-        const minT = parseFloat(grid?.dataset.min) || 16;
-        const maxT = parseFloat(grid?.dataset.max) || 30;
-        const valEl = root.querySelector("#setpointValue");
-        let target = valEl ? parseFloat(valEl.textContent) || 70 : 70;
-        target = Math.max(minT, target - 1);
-        if (entity) this._setTemperature(entity, target, roomName, hvacMode);
-      });
-    });
-    root.querySelectorAll(".step-btn[data-action='temp-up']").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const entity = btn.dataset.entity;
-        const roomName = btn.dataset.roomName || "Room";
-        const hvacMode = (btn.dataset.hvacMode || "").toLowerCase();
-        const grid = btn.closest(".thermo-grid");
-        const minT = parseFloat(grid?.dataset.min) || 16;
-        const maxT = parseFloat(grid?.dataset.max) || 30;
-        const valEl = root.querySelector("#setpointValue");
-        let target = valEl ? parseFloat(valEl.textContent) || 70 : 70;
-        target = Math.min(maxT, target + 1);
-        if (entity) this._setTemperature(entity, target, roomName, hvacMode);
-      });
-    });
-    root.querySelectorAll(".mode-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const entity = btn.dataset.entity;
-        const roomName = btn.dataset.roomName || "Room";
-        const mode = btn.dataset.mode;
-        if (!entity || !mode) return;
-        if (mode === "off") {
-          this._setClimateAndAnnounce(entity, "turn_off", "off", roomName);
-        } else {
-          this._setClimateAndAnnounce(entity, "set_hvac_mode", mode, roomName);
-        }
-      });
-    });
-    root.querySelectorAll(".fan-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const entity = btn.dataset.entity;
-        const fan = btn.dataset.fan;
-        if (entity && fan) this._setFanMode(entity, fan);
-      });
-    });
-  }
-
-  _bindThermostatControls(root) {
-    if (!root) return;
-    root.querySelectorAll(".step-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const entity = e.currentTarget.dataset.entity;
-        const roomName = e.currentTarget.dataset.roomName || "Room";
-        const action = e.currentTarget.dataset.action;
-        const hvacMode = (e.currentTarget.dataset.hvacMode || "").toLowerCase();
-        const thermo = root.querySelector(".thermo-grid[data-primary-entity]");
-        if (!entity || !thermo) return;
-        const minT = parseFloat(thermo.dataset.min) || 16;
-        const maxT = parseFloat(thermo.dataset.max) || 30;
-        const setpointEl = root.querySelector("#setpointValue");
-        let target = setpointEl ? parseFloat(setpointEl.textContent) : (minT + maxT) / 2;
-        if (action === "temp-down") target = Math.max(minT, target - 1);
-        else if (action === "temp-up") target = Math.min(maxT, target + 1);
-        this._setTemperature(entity, target, roomName, hvacMode);
-      });
-    });
-    root.querySelectorAll(".mode-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const entity = e.currentTarget.dataset.entity;
-        const roomName = e.currentTarget.dataset.roomName || "Room";
-        const mode = e.currentTarget.dataset.mode;
-        if (!entity || !mode) return;
-        if (mode === "off") {
-          this._setClimateAndAnnounce(entity, "turn_off", "off", roomName);
-        } else {
-          this._setClimateAndAnnounce(entity, "set_hvac_mode", mode, roomName);
-        }
-      });
-    });
-    root.querySelectorAll(".fan-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const entity = e.currentTarget.dataset.entity;
-        const fanMode = e.currentTarget.dataset.fan;
-        if (!entity || !fanMode) return;
-        this._setFanMode(entity, fanMode);
-      });
-    });
-  }
-
-  _bindThermostatControls(root) {
-    if (!root) return;
-    root.querySelectorAll(".step-btn[data-action='temp-down']").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const entity = btn.dataset.entity;
-        const roomName = btn.dataset.roomName || "Room";
-        const hvacMode = (btn.dataset.hvacMode || "").toLowerCase();
-        const thermo = btn.closest(".thermo-grid");
-        const minT = parseFloat(thermo?.dataset.min) || 16;
-        const maxT = parseFloat(thermo?.dataset.max) || 30;
-        const valEl = root.querySelector("#setpointValue");
-        let target = valEl ? parseFloat(valEl.textContent) : 70;
-        if (!entity) return;
-        target = Math.max(minT, target - 1);
-        this._setTemperature(entity, target, roomName, hvacMode);
-      });
-    });
-    root.querySelectorAll(".step-btn[data-action='temp-up']").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const entity = btn.dataset.entity;
-        const roomName = btn.dataset.roomName || "Room";
-        const hvacMode = (btn.dataset.hvacMode || "").toLowerCase();
-        const thermo = btn.closest(".thermo-grid");
-        const minT = parseFloat(thermo?.dataset.min) || 16;
-        const maxT = parseFloat(thermo?.dataset.max) || 30;
-        const valEl = root.querySelector("#setpointValue");
-        let target = valEl ? parseFloat(valEl.textContent) : 70;
-        if (!entity) return;
-        target = Math.min(maxT, target + 1);
-        this._setTemperature(entity, target, roomName, hvacMode);
-      });
-    });
-    root.querySelectorAll(".mode-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const entity = btn.dataset.entity;
-        const roomName = btn.dataset.roomName || "Room";
-        const mode = (btn.dataset.mode || "").toLowerCase();
-        if (!entity) return;
-        if (mode === "off") {
-          this._setClimateAndAnnounce(entity, "turn_off", "off", roomName);
-        } else {
-          this._setClimateAndAnnounce(entity, "set_hvac_mode", mode, roomName);
-        }
-      });
-    });
-    root.querySelectorAll(".fan-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const entity = btn.dataset.entity;
-        const fanMode = btn.dataset.fan;
-        if (!entity || !fanMode) return;
-        this._setFanMode(entity, fanMode);
-      });
-    });
-  }
-
-  _bindThermostatControls(root) {
-    if (!root) return;
-    root.querySelectorAll(".step-btn[data-action='temp-down']").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const entity = btn.dataset.entity;
-        const roomName = btn.dataset.roomName || "Room";
-        const hvacMode = (btn.dataset.hvacMode || "").toLowerCase();
-        if (!entity) return;
-        const thermoGrid = btn.closest(".thermo-grid");
-        const minT = parseFloat(thermoGrid?.dataset.min) || 16;
-        const maxT = parseFloat(thermoGrid?.dataset.max) || 30;
-        const valEl = root.querySelector("#setpointValue");
-        let target = valEl ? parseFloat(String(valEl.textContent).replace(/°/, "")) : 70;
-        target = Math.max(minT, Math.min(maxT, target - 1));
-        this._setTemperature(entity, target, roomName, hvacMode);
-      });
-    });
-    root.querySelectorAll(".step-btn[data-action='temp-up']").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const entity = btn.dataset.entity;
-        const roomName = btn.dataset.roomName || "Room";
-        const hvacMode = (btn.dataset.hvacMode || "").toLowerCase();
-        if (!entity) return;
-        const thermoGrid = btn.closest(".thermo-grid");
-        const minT = parseFloat(thermoGrid?.dataset.min) || 16;
-        const maxT = parseFloat(thermoGrid?.dataset.max) || 30;
-        const valEl = root.querySelector("#setpointValue");
-        let target = valEl ? parseFloat(String(valEl.textContent).replace(/°/, "")) : 70;
-        target = Math.max(minT, Math.min(maxT, target + 1));
-        this._setTemperature(entity, target, roomName, hvacMode);
-      });
-    });
-    root.querySelectorAll(".mode-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const entity = btn.dataset.entity;
-        const roomName = btn.dataset.roomName || "Room";
-        const mode = (btn.dataset.mode || "").toLowerCase();
-        if (!entity) return;
-        if (mode === "off") this._setClimateAndAnnounce(entity, "turn_off", "off", roomName);
-        else this._setClimateAndAnnounce(entity, "set_hvac_mode", mode, roomName);
-      });
-    });
-    root.querySelectorAll(".fan-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const entity = btn.dataset.entity;
-        const fanMode = btn.dataset.fan;
-        if (!entity || !fanMode) return;
-        this._setFanMode(entity, fanMode);
-      });
-    });
-  }
-
-  _bindThermostatControls(root) {
-    root.querySelectorAll(".step-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const entity = e.currentTarget.dataset.entity;
-        const action = e.currentTarget.dataset.action;
-        const roomName = e.currentTarget.dataset.roomName || "Room";
-        const hvacMode = (e.currentTarget.dataset.hvacMode || "").toLowerCase();
-        if (!entity) return;
-        const minT = parseFloat(e.currentTarget.closest(".thermo-grid")?.dataset.min) || 16;
-        const maxT = parseFloat(e.currentTarget.closest(".thermo-grid")?.dataset.max) || 30;
-        const setpointEl = root.querySelector("#setpointValue");
-        let target = setpointEl ? parseFloat(setpointEl.textContent) || 70 : 70;
-        if (action === "temp-down") target = Math.max(minT, target - 1);
-        else if (action === "temp-up") target = Math.min(maxT, target + 1);
-        this._setTemperature(entity, target, roomName, hvacMode);
-      });
-    });
-    root.querySelectorAll(".mode-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const entity = e.currentTarget.dataset.entity;
-        const mode = e.currentTarget.dataset.mode;
-        const roomName = e.currentTarget.dataset.roomName || "Room";
-        if (!entity || !mode) return;
-        if (mode === "off") {
-          this._setClimateAndAnnounce(entity, "turn_off", "off", roomName);
-        } else {
-          this._setClimateAndAnnounce(entity, "set_hvac_mode", mode, roomName);
-        }
-      });
-    });
-    root.querySelectorAll(".fan-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const entity = e.currentTarget.dataset.entity;
-        const fan = e.currentTarget.dataset.fan;
-        if (!entity || !fan) return;
-        this._setFanMode(entity, fan);
-      });
-    });
-  }
-
-  _bindThermostatControls(root) {
-    root.querySelectorAll(".step-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const entity = e.currentTarget.dataset.entity;
-        const action = e.currentTarget.dataset.action;
-        const roomName = e.currentTarget.dataset.roomName || "Room";
-        const hvacMode = (e.currentTarget.dataset.hvacMode || "").toLowerCase();
-        if (!entity) return;
-        const thermo = e.currentTarget.closest(".thermo-grid");
-        const minT = thermo ? parseFloat(thermo.dataset.min) || 16 : 16;
-        const maxT = thermo ? parseFloat(thermo.dataset.max) || 30 : 30;
-        const valEl = root.querySelector("#setpointValue");
-        const current = valEl ? parseFloat(valEl.textContent) : 70;
-        let target = current;
-        if (action === "temp-down") target = Math.max(minT, target - 1);
-        else if (action === "temp-up") target = Math.min(maxT, target + 1);
-        this._setTemperature(entity, target, roomName, hvacMode);
-      });
-    });
-    root.querySelectorAll(".mode-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const entity = e.currentTarget.dataset.entity;
-        const mode = e.currentTarget.dataset.mode;
-        const roomName = e.currentTarget.dataset.roomName || "Room";
-        if (!entity || !mode) return;
-        if (mode === "off") {
-          this._setClimateAndAnnounce(entity, "turn_off", "off", roomName);
-        } else {
-          this._setClimateAndAnnounce(entity, "set_hvac_mode", mode, roomName);
+          const haMode = mode === "auto" ? "heat_cool" : mode;
+          this._setClimateAndAnnounce(entity, "set_hvac_mode", haMode, roomName);
         }
       });
     });
@@ -2229,38 +1974,40 @@ class HomeWeatherPanel extends HTMLElement {
     const entities = this._entities || { climate: [], sensors: [], persons: [], zones: [], media_players: [], weather: [], notify: [], switch: [], mobile_app_devices: [] };
 
     const settingsStyles = `
-      .settings-tabs { display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap; }
-      .settings-tab { padding: 10px 16px; border: none; background: transparent; color: rgba(225,232,237,0.7); cursor: pointer; border-radius: 8px; font-size: 13px; }
-      .settings-tab:hover { background: rgba(255,255,255,0.05); }
-      .settings-tab.active { background: var(--accent); color: #fff; }
+      .settings-view { padding: 0 4px; }
+      .settings-tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+      .settings-tab { padding: 10px 16px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); cursor: pointer; clip-path: var(--cut-sm); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; transition: 0.16s ease; }
+      .settings-tab:hover { border-color: var(--line-2); color: var(--text); }
+      .settings-tab.active { background: #12202a; border-color: var(--ha-blue); color: var(--ha-blue-soft); }
       .settings-tab-content { display: none; }
       .settings-tab-content.active { display: block; }
-      .settings-card { background: var(--card-bg); border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); padding: 20px; margin-bottom: 16px; }
-      .settings-card h3 { margin: 0 0 16px; font-size: 16px; font-weight: 600; }
+      .settings-card { background: var(--panel); border: 1px solid var(--line); clip-path: var(--cut); padding: 20px 18px; margin-bottom: 16px; position: relative; overflow: hidden; box-shadow: var(--shadow); }
+      .settings-card::before { content: ""; position: absolute; left: 18px; right: 18px; top: 0; height: 2px; background: rgba(3,169,244,0.75); opacity: 0.7; }
+      .settings-card h3 { margin: 0 0 16px; font-size: 15px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
       .settings-section { margin-bottom: 24px; }
       .settings-section:last-child { margin-bottom: 0; }
-      .settings-section-title { font-size: 16px; font-weight: 600; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.12); }
-      .settings-section-divider { height: 1px; background: rgba(255,255,255,0.12); margin: 20px 0; }
-      .settings-card h4 { margin: 12px 0 8px; font-size: 14px; font-weight: 500; opacity: 0.95; }
+      .settings-section-title { font-size: 13px; font-weight: 800; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+      .settings-section-divider { height: 1px; background: var(--line); margin: 20px 0; }
+      .settings-card h4 { margin: 12px 0 8px; font-size: 14px; font-weight: 600; opacity: 0.95; }
       .form-group { margin-bottom: 14px; }
-      .form-label { display: block; font-size: 12px; margin-bottom: 4px; opacity: 0.9; }
-      .form-input, .form-select { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--card-border); background: #1a2840; color: #e8eef3; font-size: 13px; }
+      .form-label { display: block; font-size: 12px; margin-bottom: 4px; opacity: 0.9; color: var(--muted); }
+      .form-input, .form-select { width: 100%; padding: 10px 12px; clip-path: var(--cut-sm); border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font-size: 13px; }
       .form-select { cursor: pointer; color-scheme: dark; }
-      .form-select option { background: #1a2840; color: #e8eef3; }
-      .btn-save { margin-top: 16px; padding: 10px 20px; background: var(--accent); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; }
-      .btn-save:hover { background: var(--accent-hover); }
-      .btn-add { padding: 8px 14px; background: rgba(124,58,237,0.2); color: var(--accent); border: 1px solid var(--accent); border-radius: 8px; cursor: pointer; font-size: 12px; margin-bottom: 12px; }
-      .btn-add:hover { background: var(--accent-dim); }
-      .btn-delete { padding: 6px 12px; background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.4); border-radius: 6px; cursor: pointer; font-size: 11px; }
-      .btn-delete:hover { background: rgba(239,68,68,0.25); }
-      .room-row { padding: 0; background: rgba(0,0,0,0.18); border-radius: 10px; margin-bottom: 14px; border: 1px solid rgba(255,255,255,0.12); overflow: hidden; }
+      .form-select option { background: var(--panel-2); color: var(--text); }
+      .btn-save { margin-top: 16px; padding: 10px 20px; background: var(--ha-blue); color: var(--bg); border: 1px solid var(--line-2); clip-path: var(--cut-sm); cursor: pointer; font-weight: 800; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; }
+      .btn-save:hover { background: var(--ha-blue-2); }
+      .btn-add { padding: 8px 14px; background: #12202a; color: var(--ha-blue-soft); border: 1px solid rgba(3,169,244,0.3); clip-path: var(--cut-sm); cursor: pointer; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; }
+      .btn-add:hover { border-color: var(--ha-blue); }
+      .btn-delete { padding: 6px 12px; background: rgba(255,110,110,0.15); color: var(--danger); border: 1px solid rgba(255,110,110,0.4); clip-path: var(--cut-sm); cursor: pointer; font-size: 11px; font-weight: 600; }
+      .btn-delete:hover { background: rgba(255,110,110,0.25); }
+      .room-row { padding: 0; background: var(--panel-2); clip-path: var(--cut-sm); margin-bottom: 14px; border: 1px solid var(--line); overflow: hidden; }
       .room-row-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; cursor: pointer; user-select: none; font-size: 14px; font-weight: 500; }
       .room-row-header:hover { background: rgba(255,255,255,0.03); }
       .room-row-header .chevron { transition: transform 0.2s; }
       .room-row.collapsed .room-row-header .chevron { transform: rotate(-90deg); }
       .room-row-content { padding: 0 16px 16px; }
       .room-row.collapsed .room-row-content { display: none; }
-      .appliance-card { padding: 0; background: rgba(0,0,0,0.25); border-radius: 8px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.1); overflow: hidden; }
+      .appliance-card { padding: 0; background: var(--panel-2); clip-path: var(--cut-sm); margin-bottom: 10px; border: 1px solid var(--line); overflow: hidden; }
       .appliance-card-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; cursor: pointer; user-select: none; font-size: 14px; font-weight: 500; }
       .appliance-card-header:hover { background: rgba(255,255,255,0.03); }
       .appliance-card-header .chevron { transition: transform 0.2s; }

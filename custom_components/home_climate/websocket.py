@@ -300,12 +300,20 @@ def _get_climate_state(
                 climate_state = "off"
                 climate_mode = "off"
 
+    percentage = attrs.get("percentage")
+    if percentage is not None:
+        try:
+            percentage = int(percentage)
+        except (ValueError, TypeError):
+            percentage = None
+
     return {
         "climate_state": climate_state,
         "climate_mode": climate_mode,
         "target_temp": target_temp,
         "hvac_action": attrs.get("hvac_action"),
         "fan_mode": attrs.get("fan_mode"),
+        "percentage": percentage,
         "min_temp": min_temp,
         "max_temp": max_temp,
         "hvac_modes": list(attrs.get("hvac_modes") or []),
@@ -410,6 +418,7 @@ async def websocket_get_dashboard_data(
                     "target_temp": climate_data.get("target_temp"),
                     "hvac_action": climate_data.get("hvac_action"),
                     "fan_mode": climate_data.get("fan_mode"),
+                    "percentage": climate_data.get("percentage"),
                     "climate_mode": climate_data.get("climate_mode"),
                     "climate_state": climate_data.get("climate_state"),
                     "min_temp": climate_data.get("min_temp", 16),
