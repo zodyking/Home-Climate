@@ -97,7 +97,6 @@ const STYLES = `
   .gear::before, .gear::after { content: ""; position: absolute; inset: -6px; border: 1px dashed rgba(129,212,250,0.35); border-radius: 50%; }
   .title-panel { display: flex; align-items: center; padding: 0 clamp(12px, 2vw, 20px); justify-content: space-between; gap: 14px; min-width: 0; }
   .title-wrap { min-width: 0; }
-  .eyebrow { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.24em; margin-bottom: 6px; }
   .page-title { font-size: clamp(22px, 4.5vw, 36px); line-height: 1; font-weight: 900; letter-spacing: -0.06em; overflow-wrap: break-word; word-break: break-word; }
   .page-sub { margin-top: 6px; color: var(--muted); font-size: clamp(11px, 1.5vw, 13px); overflow: hidden; text-overflow: ellipsis; }
   .title-badge { height: 32px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ha-blue-soft); border: 1px solid rgba(3,169,244,0.2); background: #12202a; clip-path: var(--cut-sm); white-space: nowrap; flex-shrink: 0; }
@@ -130,11 +129,11 @@ const STYLES = `
   .ambient-temp { font-size: clamp(86px, 8vw, 136px); line-height: 0.84; font-weight: 900; letter-spacing: -0.09em; color: var(--text); }
   .ambient-unit { margin-top: 14px; font-size: clamp(18px, 3vw, 28px); font-weight: 800; color: var(--ha-blue-soft); }
   .ambient-text { margin-top: 8px; color: var(--muted); font-size: 13px; max-width: 95%; line-height: 1.45; }
-  .metric-grid { margin-top: 14px; display: grid; grid-template-columns: repeat(4, 1fr); gap: clamp(6px, 1vw, 12px); }
-  .metric { background: var(--panel-2); border: 1px solid var(--line); clip-path: var(--cut); padding: 12px 14px; min-height: 88px; min-width: 0; }
-  .metric .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.14em; }
-  .metric .value { margin-top: 8px; font-size: clamp(18px, 3vw, 28px); font-weight: 900; letter-spacing: -0.04em; overflow: hidden; text-overflow: ellipsis; }
-  .metric .sub { margin-top: 5px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .metric-grid { margin-top: 14px; display: grid; grid-template-columns: repeat(4, minmax(min(70px, 20vw), 1fr)); gap: clamp(6px, 1vw, 12px); }
+  .metric { background: var(--panel-2); border: 1px solid var(--line); clip-path: var(--cut); padding: clamp(8px, 1.2vw, 14px); min-height: clamp(56px, 8vw, 88px); min-width: 0; }
+  .metric .label { font-size: clamp(9px, 1.2vw, 10px); color: var(--muted); text-transform: uppercase; letter-spacing: 0.14em; }
+  .metric .value { margin-top: clamp(4px, 0.8vw, 8px); font-size: clamp(14px, 2.5vw, 28px); font-weight: 900; letter-spacing: -0.04em; overflow: hidden; text-overflow: ellipsis; }
+  .metric .sub { margin-top: clamp(2px, 0.5vw, 5px); font-size: clamp(9px, 1.1vw, 11px); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .split-temp-wrap { min-height: 0; flex: 1; display: flex; align-items: stretch; justify-content: stretch; position: relative; }
   .split-temp-card {
     flex: 1;
@@ -147,16 +146,24 @@ const STYLES = `
     background: var(--panel-2);
     clip-path: var(--cut);
   }
-  .split-temp-card::before {
+  .split-half.split-indoor {
+    clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 100%, 6px 100%);
+  }
+  .split-half.split-outdoor {
+    clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+  }
+  .split-temp-card::after {
     content: "";
     position: absolute;
     top: 0;
     left: 50%;
-    width: 2px;
+    width: 1px;
     height: 141.42%;
-    background: var(--line);
+    background: linear-gradient(to bottom, transparent, var(--ha-blue-soft), transparent);
+    opacity: 0.5;
     transform: rotate(-45deg);
     transform-origin: center center;
+    pointer-events: none;
   }
   .split-half {
     display: flex;
@@ -599,6 +606,11 @@ const STYLES = `
     flex-direction: column;
     justify-content: space-between;
     position: relative;
+    cursor: pointer;
+  }
+  .zone-card.zone-card-selected {
+    border: 2px solid var(--ha-blue);
+    box-shadow: 0 0 0 1px rgba(3,169,244,0.3);
   }
   .zone-card::before {
     content: "";
@@ -663,18 +675,20 @@ const STYLES = `
     .main .zones { grid-column: 1; grid-row: 3; min-height: 240px; }
     .main .systems { grid-column: 1; grid-row: 4; }
     .overview-grid { grid-template-columns: 1fr; }
-    .metric-grid { grid-template-columns: repeat(2, 1fr); }
   }
   @media (max-width: 600px) {
     .panel-container { padding: clamp(8px, 2vw, 12px); }
   }
   @media (max-width: 500px) {
-    .metric-grid { grid-template-columns: 1fr; }
+    .metric-grid { grid-template-columns: repeat(2, 1fr); }
     .mode-grid, .fan-grid { grid-template-columns: repeat(2, 1fr); }
     .setting-row { grid-template-columns: 1fr; }
     .zones-grid { grid-template-columns: 1fr; }
     .systems-grid { grid-template-columns: 1fr; }
     .setpoint-row { grid-template-columns: 40px 1fr 40px; }
+  }
+  @media (max-width: 380px) {
+    .metric-grid { grid-template-columns: 1fr; }
   }
 `;
 
@@ -696,6 +710,7 @@ class HomeWeatherPanel extends HTMLElement {
     this._collapsedAppliances = new Set();
     this._collapseInitializedForSession = false;
     this._draggingWheelEntity = null;
+    this._selectedRoomId = null;
   }
 
   set hass(hass) {
@@ -937,6 +952,14 @@ class HomeWeatherPanel extends HTMLElement {
       });
     }
 
+    root.querySelectorAll(".zone-card").forEach((card) => {
+      card.addEventListener("click", () => {
+        const roomId = card.dataset.roomId || "";
+        this._selectedRoomId = roomId || null;
+        this._render();
+      });
+    });
+
     root.querySelectorAll(".settings-tab").forEach((tab) => {
       tab.addEventListener("click", () => {
         this._settingsTab = tab.dataset.tab;
@@ -1103,7 +1126,6 @@ class HomeWeatherPanel extends HTMLElement {
           </button>
           <div class="title-panel">
             <div class="title-wrap">
-              <div class="eyebrow">Home Assistant Climate Dashboard</div>
               <div class="page-title">Home Climate</div>
               <div class="page-sub">Command center for room monitoring, thermostat control, airflow, and system health</div>
             </div>
@@ -1159,7 +1181,9 @@ class HomeWeatherPanel extends HTMLElement {
       `;
     }
 
-    const primary = this._getPrimaryAppliance(data);
+    const selectedRoomId = this._selectedRoomId || null;
+    const selectedRoom = selectedRoomId ? rooms.find((r) => (r.id || "") === selectedRoomId) : null;
+    const primary = this._getPrimaryAppliance(data, selectedRoomId);
     const tempUnit = rooms[0]?.temperature_unit || "°F";
     const ambientTemp = indoor.temp != null ? Math.round(this._cToF(indoor.temp)) : (rooms[0]?.temp != null ? Math.round(tempUnit === "°C" ? this._cToF(rooms[0].temp) : rooms[0].temp) : "—");
     const thermalDelta = (indoor.temp != null && outdoor.temp != null) ? Math.round(Math.abs(this._cToF(indoor.temp) - this._cToF(outdoor.temp))) : "—";
@@ -1225,9 +1249,9 @@ class HomeWeatherPanel extends HTMLElement {
                 <div class="card-title">Thermostat</div>
                 <div class="card-sub">Mode, setpoint, fan, and airflow controls</div>
               </div>
-              <div class="mini-badge">HVAC</div>
+              <div class="mini-badge">${selectedRoom ? this._escapeHtml(selectedRoom.name || "Room") : "No Selection"}</div>
             </div>
-            ${primary ? this._renderThermostatCard(primary, tempUnit) : '<div class="empty-state" style="padding:24px;"><p>No climate appliance configured.</p><p>Add rooms and appliances in Settings.</p></div>'}
+            ${primary ? this._renderThermostatCard(primary, tempUnit) : '<div class="empty-state" style="padding:24px;"><p>Select a room from Zone Matrix to control its thermostat.</p></div>'}
           </div>
         </section>
         <section class="card zones">
@@ -1239,7 +1263,7 @@ class HomeWeatherPanel extends HTMLElement {
               </div>
             </div>
             <div class="zones-grid" id="roomsGrid">
-              ${rooms.map((r) => this._renderZoneCard(r, primary?.target_temp != null ? (data.rooms?.[0]?.temperature_unit === "°C" ? this._cToF(primary.target_temp) : primary.target_temp) : null)).join("")}
+              ${rooms.map((r) => this._renderZoneCard(r, primary?.target_temp != null ? (data.rooms?.[0]?.temperature_unit === "°C" ? this._cToF(primary.target_temp) : primary.target_temp) : null, this._selectedRoomId)).join("")}
             </div>
           </div>
         </section>
@@ -1387,17 +1411,18 @@ class HomeWeatherPanel extends HTMLElement {
     return (f - 32) * 5 / 9;
   }
 
-  _getPrimaryAppliance(data) {
+  _getPrimaryAppliance(data, selectedRoomId) {
     const rooms = data?.rooms || [];
-    for (const room of rooms) {
-      const apps = room.appliances || [];
-      const climate = apps.find((a) => a.is_smart_appliance !== false && (a.control_entity || a.climate_entity));
-      if (climate) return { ...climate, _roomNameForTts: room.name || "Room" };
-    }
+    if (!selectedRoomId) return null;
+    const room = rooms.find((r) => (r.id || "") === selectedRoomId);
+    if (!room) return null;
+    const apps = room.appliances || [];
+    const climate = apps.find((a) => a.is_smart_appliance !== false && (a.control_entity || a.climate_entity));
+    if (climate) return { ...climate, _roomNameForTts: room.name || "Room" };
     return null;
   }
 
-  _renderZoneCard(room, primarySetpoint) {
+  _renderZoneCard(room, primarySetpoint, selectedRoomId) {
     const tempUnit = room.temperature_unit || "°F";
     const rawTemp = room.temp;
     const tempF = rawTemp != null ? (tempUnit === "°C" ? this._cToF(rawTemp) : rawTemp) : null;
@@ -1422,8 +1447,9 @@ class HomeWeatherPanel extends HTMLElement {
     const status = "steady";
     const minT = 55, maxT = 90;
     const barPct = typeof tempF === "number" ? Math.max(0, Math.min(100, ((tempF - minT) / (maxT - minT)) * 100)) : 70;
+    const isSelected = (selectedRoomId || "") === (room.id || "");
     return `
-      <div class="zone-card" data-room-id="${this._escapeHtml(room.id || "")}">
+      <div class="zone-card ${isSelected ? "zone-card-selected" : ""}" data-room-id="${this._escapeHtml(room.id || "")}">
         <div>
           <div class="zone-top">
             <div class="zone-name">${this._escapeHtml(roomName)}</div>
@@ -1461,18 +1487,15 @@ class HomeWeatherPanel extends HTMLElement {
       }
       return allowedModes.some((a) => modeMap[a] === m || a === m.toLowerCase());
     });
+    const hasFanModes = (fanModes || []).length > 0;
+    const sliderEnabled = hasFanPct || hasFanModes;
     return `
-      <div class="thermo-grid" data-primary-entity="${entity}" data-room-name="${roomName}" data-min="${minT}" data-max="${maxT}" data-has-fan-pct="${hasFanPct}">
+      <div class="thermo-grid" data-primary-entity="${entity}" data-room-name="${roomName}" data-min="${minT}" data-max="${maxT}" data-has-fan-pct="${hasFanPct}" data-fan-modes="${(fanModes || []).join(",")}">
         <div class="setting-row">
           <div class="setting-box">
             <div class="label">Current Mode</div>
             <div class="value" id="modeValue">${this._modeLabel(mode)}</div>
             <div class="sub">Active climate program</div>
-          </div>
-          <div class="setting-box">
-            <div class="label">Fan Speed</div>
-            <div class="value" id="fanSpeedValue">${fanSpeedDisplay}</div>
-            <div class="sub">Live airflow output</div>
           </div>
         </div>
         <div class="setpoint-row">
@@ -1496,10 +1519,7 @@ class HomeWeatherPanel extends HTMLElement {
             <div class="label">Fan Control</div>
             <div class="value" id="fanLabel">${fanMode} • ${fanSpeedDisplay}</div>
           </div>
-          <div class="fan-grid" id="fanGrid">
-            ${(fanModes.slice(0, 4)).map((fm) => `<button class="fan-btn ${(fanMode || "").toLowerCase() === (fm || "").toLowerCase() ? "active" : ""}" data-fan="${this._escapeHtml(fm)}" data-entity="${entity}">${this._fanDisplayLabel(fm)}</button>`).join("")}
-          </div>
-          <input class="fan-slider" type="range" min="0" max="100" value="${fanSpeedVal}" ${hasFanPct ? "" : "disabled"} data-entity="${entity}" aria-label="Fan speed" />
+          <input class="fan-slider" type="range" min="0" max="100" value="${fanSpeedVal}" ${sliderEnabled ? "" : "disabled"} data-entity="${entity}" aria-label="Fan speed" />
         </div>
       </div>
     `;
@@ -1743,12 +1763,30 @@ class HomeWeatherPanel extends HTMLElement {
         }
       });
     });
-    root.querySelectorAll(".fan-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const entity = e.currentTarget.dataset.entity;
-        const fan = e.currentTarget.dataset.fan;
-        if (!entity || !fan) return;
-        this._setFanMode(entity, fan);
+    root.querySelectorAll(".fan-slider").forEach((slider) => {
+      const thermo = slider.closest(".thermo-grid");
+      const entity = slider.dataset.entity || thermo?.dataset?.primaryEntity;
+      const fanModesStr = thermo?.dataset?.fanModes || "Auto,Low,Medium,High";
+      const fanModes = fanModesStr.split(",").map((s) => s.trim()).filter(Boolean);
+      if (!entity || fanModes.length === 0) return;
+      const mapValueToMode = (val) => {
+        const v = Math.max(0, Math.min(100, parseInt(val, 10) || 0));
+        const hasAuto = fanModes.some((m) => (m || "").toLowerCase() === "auto");
+        if (hasAuto && v <= 10) return fanModes.find((m) => (m || "").toLowerCase() === "auto") || fanModes[0];
+        const nonAuto = fanModes.filter((m) => (m || "").toLowerCase() !== "auto");
+        const modes = nonAuto.length > 0 ? nonAuto : fanModes;
+        if (v <= 33) return modes.find((m) => (m || "").toLowerCase() === "low") || modes[0];
+        if (v <= 66) return modes.find((m) => (m || "").toLowerCase() === "medium" || (m || "").toLowerCase() === "med") || modes[Math.min(1, modes.length - 1)];
+        return modes.find((m) => (m || "").toLowerCase() === "high") || modes[modes.length - 1];
+      };
+      slider.addEventListener("input", (e) => {
+        const fanMode = mapValueToMode(e.target.value);
+        const fanLabel = root.querySelector("#fanLabel");
+        if (fanLabel) fanLabel.textContent = fanMode + " • " + e.target.value + "%";
+      });
+      slider.addEventListener("change", (e) => {
+        const fanMode = mapValueToMode(e.target.value);
+        this._setFanMode(entity, fanMode);
       });
     });
   }
