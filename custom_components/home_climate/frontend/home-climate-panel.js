@@ -77,7 +77,8 @@ const STYLES = `
   .corner.br { bottom: 12px; right: 12px; border-bottom: 2px solid; border-right: 2px solid; }
   .topbar {
     position: relative;
-    height: clamp(60px, 8vw, 78px);
+    min-height: clamp(60px, 8vw, 78px);
+    height: auto;
     display: grid;
     grid-template-columns: clamp(56px, 8vw, 74px) 1fr clamp(48px, 7vw, 64px);
     gap: 14px;
@@ -97,8 +98,8 @@ const STYLES = `
   .gear::before, .gear::after { content: ""; position: absolute; inset: -6px; border: 1px dashed rgba(129,212,250,0.35); border-radius: 50%; }
   .title-panel { display: flex; align-items: center; padding: 0 clamp(12px, 2vw, 20px); justify-content: space-between; gap: 14px; min-width: 0; }
   .title-wrap { min-width: 0; }
-  .page-title { font-size: clamp(22px, 4.5vw, 36px); line-height: 1; font-weight: 900; letter-spacing: -0.06em; overflow-wrap: break-word; word-break: break-word; }
-  .page-sub { margin-top: 6px; color: var(--muted); font-size: clamp(11px, 1.5vw, 13px); overflow: hidden; text-overflow: ellipsis; }
+  .page-title { font-size: clamp(20px, 4.5vw, 36px); line-height: 1.15; font-weight: 900; letter-spacing: -0.06em; overflow-wrap: break-word; word-break: break-word; }
+  .page-sub { margin-top: 6px; color: var(--muted); font-size: clamp(12px, 1.8vw, 14px); line-height: 1.35; overflow-wrap: break-word; word-break: break-word; white-space: normal; }
   .title-badge { height: 32px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ha-blue-soft); border: 1px solid rgba(3,169,244,0.2); background: #12202a; clip-path: var(--cut-sm); white-space: nowrap; flex-shrink: 0; }
   .main {
     position: relative;
@@ -675,6 +676,9 @@ const STYLES = `
   }
   @media (max-width: 600px) {
     .panel-container { padding: clamp(8px, 2vw, 12px); }
+    .topbar { min-height: clamp(72px, 12vw, 90px); align-content: center; }
+    .page-title { font-size: clamp(20px, 5vw, 28px); }
+    .page-sub { font-size: clamp(12px, 2.2vw, 14px); margin-top: 4px; }
   }
   @media (max-width: 500px) {
     .metric-grid { grid-template-columns: repeat(2, 1fr); }
@@ -683,9 +687,18 @@ const STYLES = `
     .zones-grid { grid-template-columns: 1fr; }
     .systems-grid { grid-template-columns: 1fr; }
     .setpoint-row { grid-template-columns: 40px 1fr 40px; }
+    .topbar { min-height: clamp(80px, 14vw, 96px); }
+    .title-panel { padding: clamp(10px, 2vw, 14px) clamp(10px, 2.5vw, 16px); align-items: flex-start; overflow: visible; }
+    .page-title { font-size: clamp(18px, 5.5vw, 24px); }
+    .page-sub { font-size: clamp(12px, 2.5vw, 13px); line-height: 1.4; margin-top: 4px; }
   }
   @media (max-width: 380px) {
     .metric-grid { grid-template-columns: 1fr; }
+    .topbar { min-height: 92px; }
+    .title-panel { overflow: visible; padding: 10px 12px; }
+    .page-title { font-size: clamp(18px, 6vw, 22px); }
+    .page-sub { font-size: 12px; line-height: 1.45; }
+    .title-badge { font-size: 10px; padding: 0 8px; height: 28px; }
   }
 `;
 
@@ -1517,6 +1530,19 @@ class HomeWeatherPanel extends HTMLElement {
             <div class="value" id="modeValue">${this._modeLabel(mode)}</div>
             <div class="sub">Active climate program</div>
           </div>
+          ${(climateApps || []).length > 0 ? `
+          <div class="setting-box">
+            <div class="label">Appliance</div>
+            <select id="applianceSelect" class="setting-box-select" aria-label="Select appliance to control">
+              ${(climateApps || []).map((app) => {
+                const ent = app.control_entity || app.climate_entity || "";
+                const label = app.device_name || app.friendly_name || ent || "Appliance";
+                const sel = (this._selectedApplianceEntity || "") === ent ? " selected" : "";
+                return `<option value="${this._escapeHtml(ent)}"${sel}>${this._escapeHtml(label)}</option>`;
+              }).join("")}
+            </select>
+          </div>
+          ` : ""}
         </div>
         <div class="setpoint-row">
           <button class="step-btn" data-action="temp-down" data-entity="${entity}" data-room-name="${roomName}" data-hvac-mode="${mode}">−</button>
