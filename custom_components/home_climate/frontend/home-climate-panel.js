@@ -121,11 +121,6 @@ const STYLES = `
   .card-title { font-size: clamp(12px, 2vw, 15px); font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
   .card-sub { margin-top: 4px; font-size: clamp(10px, 1.2vw, 11px); color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
   .mini-badge { height: 32px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ha-blue-soft); border: 1px solid rgba(3,169,244,0.2); background: #12202a; clip-path: var(--cut-sm); white-space: nowrap; flex-shrink: 0; }
-  .appliance-dropdown-wrap { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
-  .appliance-dropdown-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.14em; }
-  .appliance-dropdown { flex: 1; min-width: 140px; max-width: 320px; padding: 10px 14px; font-size: 13px; font-weight: 600; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); clip-path: var(--cut-sm); outline: none; cursor: pointer; color-scheme: dark; }
-  .appliance-dropdown:hover { border-color: var(--line-2); }
-  .appliance-dropdown:focus { border-color: var(--ha-blue); box-shadow: 0 0 0 1px rgba(3,169,244,0.3); }
   .overview-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.05fr 0.95fr; gap: clamp(10px, 1.5vw, 18px); }
   .overview-grid.overview-split-layout { display: flex; flex-direction: column; gap: 14px; }
   .split-temp-card.split-temp-primary { flex: 0 0 auto; min-height: 180px; }
@@ -635,6 +630,9 @@ const STYLES = `
   .setting-box .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.16em; }
   .setting-box .value { margin-top: 8px; font-size: clamp(20px, 3.5vw, 30px); font-weight: 900; letter-spacing: -0.05em; overflow: hidden; text-overflow: ellipsis; }
   .setting-box .sub { margin-top: 5px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .setting-box .setting-box-select { margin-top: 8px; width: 100%; padding: 10px 12px; font-size: clamp(14px, 2vw, 18px); font-weight: 700; color: var(--text); background: rgba(0,0,0,0.2); border: 1px solid var(--line); clip-path: var(--cut-sm); outline: none; cursor: pointer; color-scheme: dark; }
+  .setting-box .setting-box-select:hover { border-color: var(--line-2); }
+  .setting-box .setting-box-select:focus { border-color: var(--ha-blue); box-shadow: 0 0 0 1px rgba(3,169,244,0.2); }
   .setpoint-row { display: grid; grid-template-columns: 48px 1fr 48px; gap: 10px; align-items: stretch; }
   .step-btn { font-size: 24px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); clip-path: var(--cut-sm); cursor: pointer; transition: 0.16s ease; }
   .step-btn:hover { border-color: var(--line-2); background: var(--panel-3); }
@@ -1266,20 +1264,7 @@ class HomeWeatherPanel extends HTMLElement {
               </div>
               <div class="mini-badge">${selectedRoom ? this._escapeHtml(selectedRoom.name || "Room") : "No Selection"}</div>
             </div>
-            ${climateApps.length > 0 ? `
-            <div class="appliance-dropdown-wrap">
-              <label class="appliance-dropdown-label" for="applianceSelect">Appliance</label>
-              <select id="applianceSelect" class="appliance-dropdown" data-room-id="${this._escapeHtml(selectedRoom?.id || "")}" aria-label="Select appliance to control">
-                ${climateApps.map((app) => {
-                  const ent = app.control_entity || app.climate_entity || "";
-                  const label = app.device_name || app.friendly_name || ent || "Appliance";
-                  const sel = (this._selectedApplianceEntity || "") === ent ? " selected" : "";
-                  return `<option value="${this._escapeHtml(ent)}"${sel}>${this._escapeHtml(label)}</option>`;
-                }).join("")}
-              </select>
-            </div>
-            ` : ""}
-            ${primary ? this._renderThermostatCard(primary, tempUnit) : '<div class="empty-state" style="padding:24px;"><p>Select a room from Zone Matrix to control its thermostat.</p></div>'}
+            ${primary ? this._renderThermostatCard(primary, tempUnit, climateApps) : '<div class="empty-state" style="padding:24px;"><p>Select a room from Zone Matrix to control its thermostat.</p></div>'}
           </div>
         </section>
         <section class="card zones">
@@ -1498,7 +1483,7 @@ class HomeWeatherPanel extends HTMLElement {
     `;
   }
 
-  _renderThermostatCard(primary, tempUnit = "°F") {
+  _renderThermostatCard(primary, tempUnit = "°F", climateApps = []) {
     const mode = (primary.climate_mode || primary.climate_state || "off").toLowerCase();
     const fanMode = primary.fan_mode || "Auto";
     const fanPct = primary.percentage;
