@@ -626,7 +626,7 @@ const STYLES = `
   .zone-bar { margin-top: 10px; height: 6px; background: #0d1218; border: 1px solid rgba(255,255,255,0.03); clip-path: var(--cut-sm); overflow: hidden; }
   .zone-bar span { display: block; height: 100%; background: var(--ha-blue); }
   .thermo-grid { flex: 1; min-height: 0; display: grid; grid-template-rows: auto auto auto 1fr; gap: clamp(8px, 1.2vw, 14px); }
-  .setting-row { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 10px; }
+  .setting-row { display: grid; grid-template-columns: 1fr; gap: 10px; }
   .setting-box { border: 1px solid var(--line); background: var(--panel-2); clip-path: var(--cut); padding: 12px 14px; min-height: 88px; }
   .setting-box .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.16em; }
   .setting-box .value { margin-top: 8px; font-size: clamp(20px, 3.5vw, 30px); font-weight: 900; letter-spacing: -0.05em; overflow: hidden; text-overflow: ellipsis; }
@@ -643,7 +643,12 @@ const STYLES = `
   .mode-grid, .fan-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: clamp(6px, 1vw, 12px); }
   .mode-btn, .fan-btn { min-height: clamp(36px, 4vw, 44px); font-size: clamp(9px, 1.2vw, 11px); border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); clip-path: var(--cut-sm); cursor: pointer; transition: 0.16s ease; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; }
   .mode-btn:hover, .fan-btn:hover { border-color: var(--line-2); color: var(--text); }
-  .mode-btn.active, .fan-btn.active { background: var(--ha-blue); border-color: var(--ha-blue); color: var(--bg); }
+  .fan-btn.active { background: var(--ha-blue); border-color: var(--ha-blue); color: var(--bg); }
+  .mode-btn.active { background: var(--panel-2); border-color: var(--ha-blue); color: var(--ha-blue-soft); animation: modePulseBlue 2s ease-in-out infinite; }
+  .mode-btn.active[data-mode="heat"] { border-color: var(--danger); color: #ff8a8a; animation: modePulseRed 2s ease-in-out infinite; }
+  @keyframes modePulseBlue { 0%, 100% { color: var(--ha-blue-soft); opacity: 1; } 50% { color: var(--ha-blue); opacity: 0.9; } }
+  @keyframes modePulseRed { 0%, 100% { color: #ff8a8a; opacity: 1; } 50% { color: var(--danger); opacity: 0.9; } }
+  @media (prefers-reduced-motion: reduce) { .mode-btn.active, .mode-btn.active[data-mode="heat"] { animation: none; } }
   .slider-box { border: 1px solid var(--line); background: var(--panel-2); clip-path: var(--cut); padding: 12px 14px; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
   .slider-box .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.16em; }
   .slider-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
@@ -1524,13 +1529,8 @@ class HomeWeatherPanel extends HTMLElement {
     const sliderEnabled = hasFanPct || hasFanModes;
     return `
       <div class="thermo-grid" data-primary-entity="${entity}" data-room-name="${roomName}" data-min="${minT}" data-max="${maxT}" data-has-fan-pct="${hasFanPct}" data-fan-modes="${(fanModes || []).join(",")}">
+        ${(climateApps || []).length > 0 ? `
         <div class="setting-row">
-          <div class="setting-box">
-            <div class="label">Current Mode</div>
-            <div class="value" id="modeValue">${this._modeLabel(mode)}</div>
-            <div class="sub">Active climate program</div>
-          </div>
-          ${(climateApps || []).length > 0 ? `
           <div class="setting-box">
             <div class="label">Appliance</div>
             <select id="applianceSelect" class="setting-box-select" aria-label="Select appliance to control">
@@ -1542,8 +1542,8 @@ class HomeWeatherPanel extends HTMLElement {
               }).join("")}
             </select>
           </div>
-          ` : ""}
         </div>
+        ` : ""}
         <div class="setpoint-row">
           <button class="step-btn" data-action="temp-down" data-entity="${entity}" data-room-name="${roomName}" data-hvac-mode="${mode}">−</button>
           <div class="setpoint-box">
