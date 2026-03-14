@@ -39,8 +39,8 @@ const STYLES = `
   }
   * { box-sizing: border-box; }
   .panel-container {
-    min-height: 100vh;
-    padding: 20px;
+    min-height: min(100vh, 100%);
+    padding: clamp(12px, 2.5vw, 24px);
     overflow-x: hidden;
     position: relative;
     display: flex;
@@ -77,12 +77,12 @@ const STYLES = `
   .corner.br { bottom: 12px; right: 12px; border-bottom: 2px solid; border-right: 2px solid; }
   .topbar {
     position: relative;
-    height: 78px;
+    height: clamp(60px, 8vw, 78px);
     display: grid;
-    grid-template-columns: 74px 1fr 64px;
+    grid-template-columns: clamp(56px, 8vw, 74px) 1fr clamp(48px, 7vw, 64px);
     gap: 14px;
     align-items: stretch;
-    margin-bottom: 14px;
+    margin-bottom: clamp(10px, 1.2vw, 14px);
   }
   .icon-panel, .title-panel { background: var(--panel); border: 1px solid var(--line); clip-path: var(--cut); box-shadow: var(--shadow); position: relative; overflow: hidden; }
   .icon-panel::before, .title-panel::before { content: ""; position: absolute; left: 18px; right: 18px; top: 0; height: 2px; background: rgba(3,169,244,0.75); opacity: 0.7; }
@@ -95,57 +95,80 @@ const STYLES = `
   .hamburger span:nth-child(3) { top: 16px; width: 70%; }
   .gear { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--ha-blue-soft); position: relative; }
   .gear::before, .gear::after { content: ""; position: absolute; inset: -6px; border: 1px dashed rgba(129,212,250,0.35); border-radius: 50%; }
-  .title-panel { display: flex; align-items: center; padding: 0 20px; justify-content: space-between; gap: 14px; min-width: 0; }
+  .title-panel { display: flex; align-items: center; padding: 0 clamp(12px, 2vw, 20px); justify-content: space-between; gap: 14px; min-width: 0; }
   .title-wrap { min-width: 0; }
   .eyebrow { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.24em; margin-bottom: 6px; }
-  .page-title { font-size: 36px; line-height: 1; font-weight: 900; letter-spacing: -0.06em; white-space: nowrap; }
-  .page-sub { margin-top: 6px; color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .page-title { font-size: clamp(22px, 4.5vw, 36px); line-height: 1; font-weight: 900; letter-spacing: -0.06em; overflow-wrap: break-word; word-break: break-word; }
+  .page-sub { margin-top: 6px; color: var(--muted); font-size: clamp(11px, 1.5vw, 13px); overflow: hidden; text-overflow: ellipsis; }
   .title-badge { height: 32px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ha-blue-soft); border: 1px solid rgba(3,169,244,0.2); background: #12202a; clip-path: var(--cut-sm); white-space: nowrap; flex-shrink: 0; }
   .main {
     position: relative;
     display: grid;
     grid-template-columns: 1.55fr 0.95fr;
     grid-template-rows: 1fr 0.98fr;
-    gap: 14px;
+    gap: clamp(10px, 1.5vw, 18px);
     min-height: 0;
     flex: 1;
+    overflow: hidden;
   }
-  .main .overview { grid-column: 1; grid-row: 1; }
-  .main .zones { grid-column: 1; grid-row: 2; min-height: 200px; }
-  .main .thermostat { grid-column: 2; grid-row: 1; }
-  .main .systems { grid-column: 2; grid-row: 2; }
+  .main .overview { grid-column: 1; grid-row: 1; min-width: 0; }
+  .main .zones { grid-column: 1; grid-row: 2; min-height: 200px; min-width: 0; }
+  .main .thermostat { grid-column: 2; grid-row: 1; min-width: 0; }
+  .main .systems { grid-column: 2; grid-row: 2; min-width: 0; }
   .card { background: var(--panel); border: 1px solid var(--line); clip-path: var(--cut); box-shadow: var(--shadow); position: relative; overflow: hidden; }
   .card::before { content: ""; position: absolute; left: 18px; right: 18px; top: 0; height: 2px; background: rgba(3,169,244,0.75); opacity: 0.7; }
-  .card-inner { position: relative; z-index: 1; height: 100%; padding: 16px 18px 18px; display: flex; flex-direction: column; min-height: 0; }
+  .card-inner { position: relative; z-index: 1; height: 100%; padding: clamp(12px, 1.5vw, 18px) clamp(14px, 1.8vw, 20px); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
   .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-  .card-title { font-size: 15px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
-  .card-sub { margin-top: 4px; font-size: 11px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+  .card-title { font-size: clamp(12px, 2vw, 15px); font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+  .card-sub { margin-top: 4px; font-size: clamp(10px, 1.2vw, 11px); color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
   .mini-badge { height: 32px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ha-blue-soft); border: 1px solid rgba(3,169,244,0.2); background: #12202a; clip-path: var(--cut-sm); white-space: nowrap; flex-shrink: 0; }
-  .overview-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 14px; }
+  .overview-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.05fr 0.95fr; gap: clamp(10px, 1.5vw, 18px); }
+  .overview-grid.overview-split-layout { display: flex; flex-direction: column; gap: 14px; }
+  .split-temp-card.split-temp-primary { flex: 0 0 auto; min-height: 180px; }
   .overview-left { display: flex; flex-direction: column; justify-content: space-between; min-height: 0; }
   .temp-wrap { display: flex; align-items: flex-start; gap: 10px; }
   .ambient-temp { font-size: clamp(86px, 8vw, 136px); line-height: 0.84; font-weight: 900; letter-spacing: -0.09em; color: var(--text); }
-  .ambient-unit { margin-top: 14px; font-size: 28px; font-weight: 800; color: var(--ha-blue-soft); }
+  .ambient-unit { margin-top: 14px; font-size: clamp(18px, 3vw, 28px); font-weight: 800; color: var(--ha-blue-soft); }
   .ambient-text { margin-top: 8px; color: var(--muted); font-size: 13px; max-width: 95%; line-height: 1.45; }
-  .metric-grid { margin-top: 14px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-  .metric { background: var(--panel-2); border: 1px solid var(--line); clip-path: var(--cut); padding: 12px 14px; min-height: 88px; }
+  .metric-grid { margin-top: 14px; display: grid; grid-template-columns: repeat(4, 1fr); gap: clamp(6px, 1vw, 12px); }
+  .metric { background: var(--panel-2); border: 1px solid var(--line); clip-path: var(--cut); padding: 12px 14px; min-height: 88px; min-width: 0; }
   .metric .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.14em; }
-  .metric .value { margin-top: 8px; font-size: 28px; font-weight: 900; letter-spacing: -0.04em; white-space: nowrap; }
+  .metric .value { margin-top: 8px; font-size: clamp(18px, 3vw, 28px); font-weight: 900; letter-spacing: -0.04em; overflow: hidden; text-overflow: ellipsis; }
   .metric .sub { margin-top: 5px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .target-wrap { min-height: 0; display: flex; align-items: center; justify-content: center; position: relative; }
-  .crosshair-h, .crosshair-v { position: absolute; pointer-events: none; opacity: 0.22; }
-  .crosshair-h { left: 0; right: 0; top: 50%; height: 1px; background: var(--ha-blue-soft); }
-  .crosshair-v { top: 0; bottom: 0; left: 50%; width: 1px; background: var(--ha-blue-soft); }
-  .target-shell { width: min(100%, 360px); aspect-ratio: 1; position: relative; display: grid; place-items: center; }
-  .target-shell::before { content: ""; position: absolute; inset: 4%; border: 1px solid rgba(3,169,244,0.16); border-radius: 50%; }
-  .target-shell::after { content: ""; position: absolute; inset: 14%; border: 1px dashed rgba(129,212,250,0.2); border-radius: 50%; }
-  .target-ring { width: 74%; aspect-ratio: 1; border-radius: 50%; border: 10px solid var(--ha-blue); background: var(--panel-2); display: grid; place-items: center; position: relative; }
-  .target-ring::before { content: ""; position: absolute; inset: 14px; border-radius: 50%; border: 1px solid rgba(129,212,250,0.16); }
-  .target-dot { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); width: 14px; height: 14px; border-radius: 50%; background: var(--ha-blue-soft); }
-  .target-center { text-align: center; position: relative; z-index: 1; }
-  .target-center .small { font-size: 10px; color: var(--muted); letter-spacing: 0.18em; text-transform: uppercase; }
-  .target-center .setpoint { margin-top: 8px; font-size: clamp(48px, 4vw, 62px); font-weight: 900; letter-spacing: -0.06em; }
-  .target-center .state { margin-top: 6px; font-size: 12px; color: var(--ha-blue-soft); letter-spacing: 0.14em; text-transform: uppercase; white-space: nowrap; }
+  .split-temp-wrap { min-height: 0; flex: 1; display: flex; align-items: stretch; justify-content: stretch; position: relative; }
+  .split-temp-card {
+    flex: 1;
+    min-width: 0;
+    min-height: 120px;
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    clip-path: var(--cut);
+  }
+  .split-temp-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 2px;
+    height: 141.42%;
+    background: var(--line);
+    transform: rotate(-45deg);
+    transform-origin: center center;
+  }
+  .split-half {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(12px, 2vw, 20px);
+    gap: 6px;
+  }
+  .split-half .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.14em; }
+  .split-half .temp { font-size: clamp(32px, 5vw, 48px); font-weight: 900; letter-spacing: -0.05em; color: var(--text); }
+  .split-half .humidity { font-size: 12px; color: var(--ha-blue-soft); font-weight: 700; }
   .settings-btn { width: 100%; height: 100%; border: none; background: transparent; color: inherit; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
   .settings-btn:hover { opacity: 0.9; }
   .settings-btn svg { width: 22px; height: 22px; fill: currentColor; }
@@ -562,14 +585,15 @@ const STYLES = `
     overflow-y: auto;
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
+    gap: clamp(8px, 1vw, 12px);
     align-content: start;
   }
   .zone-card {
     border: 1px solid var(--line);
     background: var(--panel-2);
     clip-path: var(--cut);
-    padding: 12px;
+    padding: clamp(10px, 1.2vw, 14px);
+    min-width: 0;
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -586,28 +610,28 @@ const STYLES = `
     background: var(--ha-blue);
   }
   .zone-top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
-  .zone-name { font-size: 14px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.2; }
+  .zone-name { font-size: clamp(12px, 1.8vw, 14px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.2; }
   .zone-tag { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.14em; white-space: nowrap; }
   .zone-temp { margin-top: 12px; display: flex; align-items: flex-end; gap: 5px; }
-  .zone-temp .value { font-size: 40px; line-height: 0.9; font-weight: 900; letter-spacing: -0.06em; }
-  .zone-temp .unit { margin-bottom: 4px; font-size: 14px; font-weight: 700; color: var(--ha-blue-soft); }
+  .zone-temp .value { font-size: clamp(26px, 4.5vw, 40px); line-height: 0.9; font-weight: 900; letter-spacing: -0.06em; }
+  .zone-temp .unit { margin-bottom: 4px; font-size: clamp(11px, 1.5vw, 14px); font-weight: 700; color: var(--ha-blue-soft); }
   .zone-meta { margin-top: 8px; display: flex; justify-content: space-between; gap: 10px; font-size: 11px; color: var(--muted); white-space: nowrap; }
   .zone-bar { margin-top: 10px; height: 6px; background: #0d1218; border: 1px solid rgba(255,255,255,0.03); clip-path: var(--cut-sm); overflow: hidden; }
   .zone-bar span { display: block; height: 100%; background: var(--ha-blue); }
-  .thermo-grid { flex: 1; min-height: 0; display: grid; grid-template-rows: auto auto auto 1fr; gap: 12px; }
+  .thermo-grid { flex: 1; min-height: 0; display: grid; grid-template-rows: auto auto auto 1fr; gap: clamp(8px, 1.2vw, 14px); }
   .setting-row { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 10px; }
   .setting-box { border: 1px solid var(--line); background: var(--panel-2); clip-path: var(--cut); padding: 12px 14px; min-height: 88px; }
   .setting-box .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.16em; }
-  .setting-box .value { margin-top: 8px; font-size: 30px; font-weight: 900; letter-spacing: -0.05em; white-space: nowrap; }
+  .setting-box .value { margin-top: 8px; font-size: clamp(20px, 3.5vw, 30px); font-weight: 900; letter-spacing: -0.05em; overflow: hidden; text-overflow: ellipsis; }
   .setting-box .sub { margin-top: 5px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .setpoint-row { display: grid; grid-template-columns: 48px 1fr 48px; gap: 10px; align-items: stretch; }
   .step-btn { font-size: 24px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); clip-path: var(--cut-sm); cursor: pointer; transition: 0.16s ease; }
   .step-btn:hover { border-color: var(--line-2); background: var(--panel-3); }
   .setpoint-box { border: 1px solid var(--line); background: var(--panel-2); clip-path: var(--cut); display: flex; align-items: center; justify-content: center; flex-direction: column; min-height: 88px; }
   .setpoint-box .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.16em; }
-  .setpoint-box .value { margin-top: 6px; font-size: 42px; font-weight: 900; letter-spacing: -0.06em; }
-  .mode-grid, .fan-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-  .mode-btn, .fan-btn { height: 40px; font-size: 11px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); clip-path: var(--cut-sm); cursor: pointer; transition: 0.16s ease; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; }
+  .setpoint-box .value { margin-top: 6px; font-size: clamp(28px, 5vw, 42px); font-weight: 900; letter-spacing: -0.06em; }
+  .mode-grid, .fan-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: clamp(6px, 1vw, 12px); }
+  .mode-btn, .fan-btn { min-height: clamp(36px, 4vw, 44px); font-size: clamp(9px, 1.2vw, 11px); border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); clip-path: var(--cut-sm); cursor: pointer; transition: 0.16s ease; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; }
   .mode-btn:hover, .fan-btn:hover { border-color: var(--line-2); color: var(--text); }
   .mode-btn.active, .fan-btn.active { background: var(--ha-blue); border-color: var(--ha-blue); color: var(--bg); }
   .slider-box { border: 1px solid var(--line); background: var(--panel-2); clip-path: var(--cut); padding: 12px 14px; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
@@ -617,9 +641,9 @@ const STYLES = `
   input[type="range"], .fan-slider { width: 100%; height: 8px; appearance: none; background: #0d1218; border: 1px solid rgba(255,255,255,0.03); clip-path: var(--cut-sm); outline: none; }
   input[type="range"]::-webkit-slider-thumb, .fan-slider::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; background: var(--ha-blue-soft); border: 2px solid var(--ha-blue); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); cursor: pointer; }
   input[type="range"]::-moz-range-thumb, .fan-slider::-moz-range-thumb { width: 14px; height: 14px; background: var(--ha-blue-soft); border: 2px solid var(--ha-blue); border-radius: 0; cursor: pointer; }
-  .systems-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; flex: 1; min-height: 0; align-content: start; }
+  .systems-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(10px, 1.5vw, 14px); flex: 1; min-height: 0; align-content: start; }
   .stack { display: grid; gap: 10px; min-height: 0; }
-  .data-item { border: 1px solid var(--line); background: var(--panel-2); clip-path: var(--cut); padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 58px; font-size: 12px; color: var(--muted); }
+  .data-item { border: 1px solid var(--line); background: var(--panel-2); clip-path: var(--cut); padding: clamp(10px, 1.2vw, 14px); display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: clamp(48px, 6vw, 58px); font-size: 12px; color: var(--muted); }
   .data-item span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
   .data-item strong { font-size: 14px; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; color: var(--text); }
   .data-item .ok { color: var(--good); }
@@ -631,6 +655,26 @@ const STYLES = `
   }
   @media (max-width: 1180px) {
     .zones-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto; }
+    .main .overview { grid-column: 1; grid-row: 1; }
+    .main .thermostat { grid-column: 1; grid-row: 2; }
+    .main .zones { grid-column: 1; grid-row: 3; min-height: 240px; }
+    .main .systems { grid-column: 1; grid-row: 4; }
+    .overview-grid { grid-template-columns: 1fr; }
+    .metric-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 600px) {
+    .panel-container { padding: clamp(8px, 2vw, 12px); }
+  }
+  @media (max-width: 500px) {
+    .metric-grid { grid-template-columns: 1fr; }
+    .mode-grid, .fan-grid { grid-template-columns: repeat(2, 1fr); }
+    .setting-row { grid-template-columns: 1fr; }
+    .zones-grid { grid-template-columns: 1fr; }
+    .systems-grid { grid-template-columns: 1fr; }
+    .setpoint-row { grid-template-columns: 40px 1fr 40px; }
   }
 `;
 
@@ -736,20 +780,41 @@ class HomeWeatherPanel extends HTMLElement {
   _patchDashboardData(newData, prevData) {
     const root = this.shadowRoot;
     if (!root || !newData?.rooms || !prevData?.rooms) return false;
-    if (!root.querySelector(".summary-card")) return false;
+    const hasSummary = root.querySelector(".summary-card");
+    const hasOverviewSplit = root.querySelector("#splitIndoorTemp");
+    if (!hasSummary && !hasOverviewSplit) return false;
 
     const newRooms = newData.rooms || [];
     const prevRooms = prevData.rooms || [];
 
-    // Patch summary cards (outdoor, indoor aggregate)
     const outdoor = newData.outdoor || { temp: null, humidity: null };
     const indoor = newData.indoor_aggregate || { temp: null, humidity: null };
+    const outdoorTemp = outdoor.temp != null ? this._cToF(outdoor.temp).toFixed(1) : "—";
+    const outdoorHum = outdoor.humidity != null ? outdoor.humidity.toFixed(0) : "—";
+    const indoorTemp = indoor.temp != null ? this._cToF(indoor.temp).toFixed(1) : "—";
+    const indoorHum = indoor.humidity != null ? indoor.humidity.toFixed(0) : "—";
+    const unit = DISPLAY_UNIT;
+    const thermalDelta = (indoor.temp != null && outdoor.temp != null) ? Math.round(Math.abs(this._cToF(indoor.temp) - this._cToF(outdoor.temp))) : "—";
+
+    if (hasOverviewSplit) {
+      const splitIndoorTemp = root.querySelector("#splitIndoorTemp");
+      const splitIndoorHum = root.querySelector("#splitIndoorHum");
+      const splitOutdoorTemp = root.querySelector("#splitOutdoorTemp");
+      const splitOutdoorHum = root.querySelector("#splitOutdoorHum");
+      if (splitIndoorTemp) splitIndoorTemp.textContent = indoorTemp !== "—" ? indoorTemp + unit : indoorTemp;
+      if (splitIndoorHum) splitIndoorHum.textContent = indoorHum !== "—" ? indoorHum + "%" : indoorHum;
+      if (splitOutdoorTemp) splitOutdoorTemp.textContent = outdoorTemp !== "—" ? outdoorTemp + unit : outdoorTemp;
+      if (splitOutdoorHum) splitOutdoorHum.textContent = outdoorHum !== "—" ? outdoorHum + "%" : outdoorHum;
+      const thermalEl = root.querySelector(".overview .metric-grid .metric:nth-child(4) .value");
+      if (thermalEl) thermalEl.textContent = thermalDelta !== "—" ? thermalDelta + "°" : thermalDelta;
+      const humMetric = root.querySelector(".overview .metric-grid .metric:first-child .value");
+      if (humMetric) humMetric.textContent = indoorHum !== "—" ? indoorHum + "%" : indoorHum;
+      const humMetricSub = root.querySelector(".overview .metric-grid .metric:first-child .sub");
+      if (humMetricSub) humMetricSub.textContent = parseFloat(indoorHum) >= 40 && parseFloat(indoorHum) <= 60 ? "Balanced" : "—";
+    }
+
     const summaryCards = root.querySelectorAll(".summary-card");
     if (summaryCards.length >= 2) {
-      const outdoorTemp = outdoor.temp != null ? this._cToF(outdoor.temp).toFixed(1) : "—";
-      const outdoorHum = outdoor.humidity != null ? outdoor.humidity.toFixed(0) : "—";
-      const indoorTemp = indoor.temp != null ? this._cToF(indoor.temp).toFixed(1) : "—";
-      const indoorHum = indoor.humidity != null ? indoor.humidity.toFixed(0) : "—";
       const stat0 = summaryCards[0].querySelectorAll(".room-stat-value");
       const stat1 = summaryCards[1].querySelectorAll(".room-stat-value");
       if (stat0.length >= 2) { stat0[0].textContent = outdoorTemp; stat0[1].textContent = outdoorHum; }
@@ -1115,50 +1180,39 @@ class HomeWeatherPanel extends HTMLElement {
               </div>
               <div class="mini-badge">Core</div>
             </div>
-            <div class="overview-grid">
-              <div class="overview-left">
-                <div>
-                  <div class="temp-wrap">
-                    <div class="ambient-temp" id="ambientTemp">${ambientTemp}</div>
-                    <div class="ambient-unit">${unit}</div>
-                  </div>
-                  <div class="ambient-text">Average indoor reading across all active rooms with healthy humidity and stable pressure.</div>
+            <div class="overview-grid overview-split-layout">
+              <div class="split-temp-card split-temp-primary">
+                <div class="split-half split-indoor">
+                  <div class="label">Indoor</div>
+                  <div class="temp" id="splitIndoorTemp">${indoorTemp !== "—" ? indoorTemp + unit : indoorTemp}</div>
+                  <div class="humidity" id="splitIndoorHum">${indoorHum !== "—" ? indoorHum + "%" : indoorHum}</div>
                 </div>
-                <div class="metric-grid">
-                  <div class="metric">
-                    <div class="label">Humidity</div>
-                    <div class="value">${indoorHum}%</div>
-                    <div class="sub">${parseFloat(indoorHum) >= 40 && parseFloat(indoorHum) <= 60 ? "Balanced" : "—"}</div>
-                  </div>
-                  <div class="metric">
-                    <div class="label">Air Quality</div>
-                    <div class="value">Good</div>
-                    <div class="sub">Clean</div>
-                  </div>
-                  <div class="metric">
-                    <div class="label">Pressure</div>
-                    <div class="value">1013</div>
-                    <div class="sub">mbar stable</div>
-                  </div>
-                  <div class="metric">
-                    <div class="label">Thermal Delta</div>
-                    <div class="value">${thermalDelta}°</div>
-                    <div class="sub">Indoor vs outdoor</div>
-                  </div>
+                <div class="split-half split-outdoor">
+                  <div class="label">Outdoor</div>
+                  <div class="temp" id="splitOutdoorTemp">${outdoorTemp !== "—" ? outdoorTemp + unit : outdoorTemp}</div>
+                  <div class="humidity" id="splitOutdoorHum">${outdoorHum !== "—" ? outdoorHum + "%" : outdoorHum}</div>
                 </div>
               </div>
-              <div class="target-wrap">
-                <div class="crosshair-h"></div>
-                <div class="crosshair-v"></div>
-                <div class="target-shell">
-                  <div class="target-ring">
-                    <div class="target-dot"></div>
-                    <div class="target-center">
-                      <div class="small">Target Setpoint</div>
-                      <div class="setpoint" id="overviewSetpoint">${setpoint}${typeof setpoint === "number" ? "°" : ""}</div>
-                      <div class="state" id="overviewMode">${modeLabel} ${primary ? "Active" : ""}</div>
-                    </div>
-                  </div>
+              <div class="metric-grid">
+                <div class="metric">
+                  <div class="label">Humidity</div>
+                  <div class="value">${indoorHum !== "—" ? indoorHum + "%" : indoorHum}</div>
+                  <div class="sub">${parseFloat(indoorHum) >= 40 && parseFloat(indoorHum) <= 60 ? "Balanced" : "—"}</div>
+                </div>
+                <div class="metric">
+                  <div class="label">Air Quality</div>
+                  <div class="value">Good</div>
+                  <div class="sub">Clean</div>
+                </div>
+                <div class="metric">
+                  <div class="label">Pressure</div>
+                  <div class="value">1013</div>
+                  <div class="sub">mbar stable</div>
+                </div>
+                <div class="metric">
+                  <div class="label">Thermal Delta</div>
+                  <div class="value">${thermalDelta !== "—" ? thermalDelta + "°" : thermalDelta}</div>
+                  <div class="sub">Indoor vs outdoor</div>
                 </div>
               </div>
             </div>
@@ -1400,7 +1454,7 @@ class HomeWeatherPanel extends HTMLElement {
     const entity = this._escapeHtml(primary.control_entity || primary.climate_entity || "");
     const roomName = this._escapeHtml(primary._roomNameForTts || "Room");
     const modeMap = { cool: "Cool", heat: "Heat", dry: "Dry", fan_only: "Fan" };
-    const modesForUi = ["Cool", "Heat", "Auto", "Dry"].filter((m) => {
+    const modesForUi = ["Cool", "Heat", "Auto", "Dry", "Fan"].filter((m) => {
       if (m === "Auto") {
         const lower = (hvacModes || []).map((x) => (x || "").toLowerCase());
         return lower.includes("heat_cool") || lower.includes("auto");
@@ -1431,9 +1485,10 @@ class HomeWeatherPanel extends HTMLElement {
         </div>
         <div class="mode-grid" id="modeGrid">
           ${modesForUi.map((m) => {
-            const dm = m === "Auto" ? "heat_cool" : m.toLowerCase();
+            const dm = m === "Auto" ? "heat_cool" : (m === "Fan" ? "fan_only" : m.toLowerCase());
             const active = mode === dm || (m === "Auto" && mode === "heat_cool");
-            return `<button class="mode-btn ${active ? "active" : ""}" data-mode="${dm}" data-entity="${entity}" data-room-name="${roomName}">${m}</button>`;
+            const label = m === "Fan" ? "Fan Only" : m;
+            return `<button class="mode-btn ${active ? "active" : ""}" data-mode="${dm}" data-entity="${entity}" data-room-name="${roomName}">${label}</button>`;
           }).join("")}
         </div>
         <div class="slider-box">
