@@ -121,6 +121,11 @@ const STYLES = `
   .card-title { font-size: clamp(12px, 2vw, 15px); font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
   .card-sub { margin-top: 4px; font-size: clamp(10px, 1.2vw, 11px); color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
   .mini-badge { height: 32px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ha-blue-soft); border: 1px solid rgba(3,169,244,0.2); background: #12202a; clip-path: var(--cut-sm); white-space: nowrap; flex-shrink: 0; }
+  .appliance-dropdown-wrap { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .appliance-dropdown-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.14em; }
+  .appliance-dropdown { flex: 1; min-width: 140px; max-width: 320px; padding: 10px 14px; font-size: 13px; font-weight: 600; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); clip-path: var(--cut-sm); outline: none; cursor: pointer; color-scheme: dark; }
+  .appliance-dropdown:hover { border-color: var(--line-2); }
+  .appliance-dropdown:focus { border-color: var(--ha-blue); box-shadow: 0 0 0 1px rgba(3,169,244,0.3); }
   .overview-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.05fr 0.95fr; gap: clamp(10px, 1.5vw, 18px); }
   .overview-grid.overview-split-layout { display: flex; flex-direction: column; gap: 14px; }
   .split-temp-card.split-temp-primary { flex: 0 0 auto; min-height: 180px; }
@@ -146,22 +151,16 @@ const STYLES = `
     background: var(--panel-2);
     clip-path: var(--cut);
   }
-  .split-half.split-indoor {
-    clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 100%, 6px 100%);
-  }
-  .split-half.split-outdoor {
-    clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
-  }
   .split-temp-card::after {
     content: "";
     position: absolute;
-    top: 0;
+    top: 50%;
     left: 50%;
-    width: 1px;
-    height: 141.42%;
-    background: linear-gradient(to bottom, transparent, var(--ha-blue-soft), transparent);
-    opacity: 0.5;
-    transform: rotate(-45deg);
+    width: 3px;
+    height: 200%;
+    background: var(--line-2);
+    box-shadow: 0 0 0 1px rgba(3,169,244,0.15);
+    transform: translate(-50%, -50%) rotate(-45deg);
     transform-origin: center center;
     pointer-events: none;
   }
@@ -711,6 +710,7 @@ class HomeWeatherPanel extends HTMLElement {
     this._collapseInitializedForSession = false;
     this._draggingWheelEntity = null;
     this._selectedRoomId = null;
+    this._selectedApplianceEntity = null;
   }
 
   set hass(hass) {
@@ -956,9 +956,23 @@ class HomeWeatherPanel extends HTMLElement {
       card.addEventListener("click", () => {
         const roomId = card.dataset.roomId || "";
         this._selectedRoomId = roomId || null;
+        const data = this._dashboardData || {};
+        const room = roomId ? (data.rooms || []).find((r) => (r.id || "") === roomId) : null;
+        const climateApps = (room?.appliances || []).filter((a) => a.is_smart_appliance !== false && (a.control_entity || a.climate_entity));
+        const firstEntity = climateApps[0] ? (climateApps[0].control_entity || climateApps[0].climate_entity) : null;
+        this._selectedApplianceEntity = firstEntity || null;
         this._render();
       });
     });
+
+    const applianceSelect = root.querySelector("#applianceSelect");
+    if (applianceSelect) {
+      applianceSelect.addEventListener("change", (e) => {
+        const entity = (e.target.value || "").trim();
+        this._selectedApplianceEntity = entity || null;
+        this._render();
+      });
+    }
 
     root.querySelectorAll(".settings-tab").forEach((tab) => {
       tab.addEventListener("click", () => {
@@ -1183,7 +1197,8 @@ class HomeWeatherPanel extends HTMLElement {
 
     const selectedRoomId = this._selectedRoomId || null;
     const selectedRoom = selectedRoomId ? rooms.find((r) => (r.id || "") === selectedRoomId) : null;
-    const primary = this._getPrimaryAppliance(data, selectedRoomId);
+    const climateApps = selectedRoom ? (selectedRoom.appliances || []).filter((a) => a.is_smart_appliance !== false && (a.control_entity || a.climate_entity)) : [];
+    const primary = this._getPrimaryAppliance(data, selectedRoomId, this._selectedApplianceEntity);
     const tempUnit = rooms[0]?.temperature_unit || "°F";
     const ambientTemp = indoor.temp != null ? Math.round(this._cToF(indoor.temp)) : (rooms[0]?.temp != null ? Math.round(tempUnit === "°C" ? this._cToF(rooms[0].temp) : rooms[0].temp) : "—");
     const thermalDelta = (indoor.temp != null && outdoor.temp != null) ? Math.round(Math.abs(this._cToF(indoor.temp) - this._cToF(outdoor.temp))) : "—";
@@ -1251,6 +1266,19 @@ class HomeWeatherPanel extends HTMLElement {
               </div>
               <div class="mini-badge">${selectedRoom ? this._escapeHtml(selectedRoom.name || "Room") : "No Selection"}</div>
             </div>
+            ${climateApps.length > 0 ? `
+            <div class="appliance-dropdown-wrap">
+              <label class="appliance-dropdown-label" for="applianceSelect">Appliance</label>
+              <select id="applianceSelect" class="appliance-dropdown" data-room-id="${this._escapeHtml(selectedRoom?.id || "")}" aria-label="Select appliance to control">
+                ${climateApps.map((app) => {
+                  const ent = app.control_entity || app.climate_entity || "";
+                  const label = app.device_name || app.friendly_name || ent || "Appliance";
+                  const sel = (this._selectedApplianceEntity || "") === ent ? " selected" : "";
+                  return `<option value="${this._escapeHtml(ent)}"${sel}>${this._escapeHtml(label)}</option>`;
+                }).join("")}
+              </select>
+            </div>
+            ` : ""}
             ${primary ? this._renderThermostatCard(primary, tempUnit) : '<div class="empty-state" style="padding:24px;"><p>Select a room from Zone Matrix to control its thermostat.</p></div>'}
           </div>
         </section>
@@ -1411,15 +1439,22 @@ class HomeWeatherPanel extends HTMLElement {
     return (f - 32) * 5 / 9;
   }
 
-  _getPrimaryAppliance(data, selectedRoomId) {
+  _getPrimaryAppliance(data, selectedRoomId, selectedApplianceEntity) {
     const rooms = data?.rooms || [];
     if (!selectedRoomId) return null;
     const room = rooms.find((r) => (r.id || "") === selectedRoomId);
     if (!room) return null;
     const apps = room.appliances || [];
-    const climate = apps.find((a) => a.is_smart_appliance !== false && (a.control_entity || a.climate_entity));
-    if (climate) return { ...climate, _roomNameForTts: room.name || "Room" };
-    return null;
+    const climateApps = apps.filter((a) => a.is_smart_appliance !== false && (a.control_entity || a.climate_entity));
+    if (climateApps.length === 0) return null;
+    let climate = climateApps.find((a) => (a.control_entity || a.climate_entity || "") === (selectedApplianceEntity || ""));
+    if (!climate) climate = climateApps[0];
+    return { ...climate, _roomNameForTts: room.name || "Room" };
+  }
+
+  _getClimateAppliancesForRoom(room) {
+    if (!room) return [];
+    return (room.appliances || []).filter((a) => a.is_smart_appliance !== false && (a.control_entity || a.climate_entity));
   }
 
   _renderZoneCard(room, primarySetpoint, selectedRoomId) {
