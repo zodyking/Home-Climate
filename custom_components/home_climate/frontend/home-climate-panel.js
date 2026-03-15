@@ -131,7 +131,7 @@ const STYLES = `
   .ambient-unit { margin-top: 14px; font-size: clamp(18px, 3vw, 28px); font-weight: 800; color: var(--ha-blue-soft); }
   .ambient-text { margin-top: 8px; color: var(--muted); font-size: 13px; max-width: 95%; line-height: 1.45; }
   .metric-grid { margin-top: 14px; display: grid; grid-template-columns: repeat(4, minmax(min(70px, 20vw), 1fr)); gap: clamp(6px, 1vw, 12px); }
-  .metric { background: var(--panel-2); border: 1px solid var(--line); clip-path: var(--cut); padding: clamp(8px, 1.2vw, 14px); min-height: clamp(56px, 8vw, 88px); min-width: 0; }
+  .metric { background: var(--panel-2); border: 1px solid var(--line); clip-path: var(--cut); padding: clamp(8px, 1.2vw, 14px); min-height: clamp(56px, 8vw, 88px); min-width: 0; text-align: center; }
   .metric .label { font-size: clamp(9px, 1.2vw, 10px); color: var(--muted); text-transform: uppercase; letter-spacing: 0.14em; }
   .metric .value { margin-top: clamp(4px, 0.8vw, 8px); font-size: clamp(14px, 2.5vw, 28px); font-weight: 900; letter-spacing: -0.04em; overflow: hidden; text-overflow: ellipsis; }
   .metric .sub { margin-top: clamp(2px, 0.5vw, 5px); font-size: clamp(9px, 1.1vw, 11px); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -665,6 +665,10 @@ const STYLES = `
   .data-item .warn { color: var(--warn); }
   .data-item .blue { color: var(--ha-blue-soft); }
   .footer-label { position: absolute; right: 24px; bottom: 18px; font-size: 11px; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; }
+  @media (min-width: 600px) {
+    .topbar { grid-template-columns: 1fr clamp(48px, 7vw, 64px); }
+    .topbar #menu-btn { display: none !important; }
+  }
   @media (max-width: 1450px) {
     .zones-grid { grid-template-columns: repeat(3, 1fr); }
   }
@@ -769,7 +773,7 @@ class HomeWeatherPanel extends HTMLElement {
       const [configRes, userRes, entitiesRes] = await Promise.all([
         this._hass.callWS({ type: "home_climate/get_config" }),
         this._hass.callWS({ type: "home_climate/get_user_info" }).catch(() => ({ is_admin: false })),
-        this._hass.callWS({ type: "home_climate/get_entities" }).catch(() => ({ climate: [], sensors: [], persons: [], zones: [], media_players: [], weather: [], notify: [], switch: [], mobile_app_devices: [] })),
+        this._hass.callWS({ type: "home_climate/get_entities" }).catch(() => ({ climate: [], sensors: [], persons: [], zones: [], media_players: [], weather: [], notify: [], switch: [], mobile_app_devices: [], schedules: [], proximity: [] })),
       ]);
       this._config = configRes || {};
       this._isAdmin = userRes?.is_admin === true;
@@ -833,15 +837,25 @@ class HomeWeatherPanel extends HTMLElement {
       const splitOutdoorTemp = root.querySelector("#splitOutdoorTemp");
       const splitOutdoorHum = root.querySelector("#splitOutdoorHum");
       if (splitIndoorTemp) splitIndoorTemp.textContent = indoorTemp !== "—" ? indoorTemp + unit : indoorTemp;
-      if (splitIndoorHum) splitIndoorHum.textContent = indoorHum !== "—" ? indoorHum + "%" : indoorHum;
+      if (splitIndoorHum) splitIndoorHum.textContent = indoorHum !== "—" ? "Humidity " + indoorHum + "%" : "Humidity —";
       if (splitOutdoorTemp) splitOutdoorTemp.textContent = outdoorTemp !== "—" ? outdoorTemp + unit : outdoorTemp;
-      if (splitOutdoorHum) splitOutdoorHum.textContent = outdoorHum !== "—" ? outdoorHum + "%" : outdoorHum;
-      const thermalEl = root.querySelector(".overview .metric-grid .metric:nth-child(4) .value");
+      if (splitOutdoorHum) splitOutdoorHum.textContent = outdoorHum !== "—" ? "Humidity " + outdoorHum + "%" : "Humidity —";
+      const thermalEl = root.querySelector(".overview .metric-grid .metric:nth-child(2) .value");
       if (thermalEl) thermalEl.textContent = thermalDelta !== "—" ? thermalDelta + "°" : thermalDelta;
-      const humMetric = root.querySelector(".overview .metric-grid .metric:first-child .value");
+      const humMetric = root.querySelector(".overview .metric-grid .metric:nth-child(1) .value");
       if (humMetric) humMetric.textContent = indoorHum !== "—" ? indoorHum + "%" : indoorHum;
-      const humMetricSub = root.querySelector(".overview .metric-grid .metric:first-child .sub");
+      const humMetricSub = root.querySelector(".overview .metric-grid .metric:nth-child(1) .sub");
       if (humMetricSub) humMetricSub.textContent = parseFloat(indoorHum) >= 40 && parseFloat(indoorHum) <= 60 ? "Balanced" : "—";
+      const dewPointMetric = root.querySelector(".overview .metric-grid .metric:nth-child(3) .value");
+      const dewPointSub = root.querySelector(".overview .metric-grid .metric:nth-child(3) .sub");
+      if (dewPointMetric || dewPointSub) {
+        const dp = (indoor.temp != null && indoor.humidity != null)
+          ? indoor.temp - (100 - indoor.humidity) / 5
+          : null;
+        const dpDisp = dp != null ? Math.round(this._cToF(dp)) : "—";
+        if (dewPointMetric) dewPointMetric.textContent = dp != null ? dpDisp + DISPLAY_UNIT : "—";
+        if (dewPointSub) dewPointSub.textContent = dp != null ? "From temp+humidity" : "—";
+      }
     }
 
     const summaryCards = root.querySelectorAll(".summary-card");
@@ -1009,6 +1023,13 @@ class HomeWeatherPanel extends HTMLElement {
     if (saveSettingsBtn) {
       saveSettingsBtn.addEventListener("click", () => this._saveSettings());
     }
+
+    root.querySelectorAll("input[data-field='volume']").forEach((slider) => {
+      const valSpan = slider.closest(".form-group")?.querySelector(".volume-value");
+      if (valSpan) {
+        slider.addEventListener("input", () => { valSpan.textContent = parseFloat(slider.value).toFixed(1); });
+      }
+    });
 
     const addRoomBtn = root.querySelector("[data-action='add-room']");
     if (addRoomBtn) {
@@ -1218,6 +1239,9 @@ class HomeWeatherPanel extends HTMLElement {
     const tempUnit = rooms[0]?.temperature_unit || "°F";
     const ambientTemp = indoor.temp != null ? Math.round(this._cToF(indoor.temp)) : (rooms[0]?.temp != null ? Math.round(tempUnit === "°C" ? this._cToF(rooms[0].temp) : rooms[0].temp) : "—");
     const thermalDelta = (indoor.temp != null && outdoor.temp != null) ? Math.round(Math.abs(this._cToF(indoor.temp) - this._cToF(outdoor.temp))) : "—";
+    const dewPoint = (indoor.temp != null && indoor.humidity != null && indoor.humidity >= 1 && indoor.humidity <= 100)
+      ? Math.round(this._cToF(indoor.temp - (100 - indoor.humidity) / 5))
+      : "—";
     const setpointRaw = primary?.target_temp;
     const setpoint = primary && setpointRaw != null ? Math.round(tempUnit === "°C" ? this._cToF(setpointRaw) : setpointRaw) : "—";
     const modeLabel = primary ? this._modeLabel((primary.climate_mode || primary.climate_state || "off").toLowerCase()) : "—";
@@ -1240,12 +1264,12 @@ class HomeWeatherPanel extends HTMLElement {
                 <div class="split-half split-indoor">
                   <div class="label">Indoor</div>
                   <div class="temp" id="splitIndoorTemp">${indoorTemp !== "—" ? indoorTemp + unit : indoorTemp}</div>
-                  <div class="humidity" id="splitIndoorHum">${indoorHum !== "—" ? indoorHum + "%" : indoorHum}</div>
+                  <div class="humidity" id="splitIndoorHum">${indoorHum !== "—" ? indoorHum + "% humidity" : "Humidity —"}</div>
                 </div>
                 <div class="split-half split-outdoor">
                   <div class="label">Outdoor</div>
                   <div class="temp" id="splitOutdoorTemp">${outdoorTemp !== "—" ? outdoorTemp + unit : outdoorTemp}</div>
-                  <div class="humidity" id="splitOutdoorHum">${outdoorHum !== "—" ? outdoorHum + "%" : outdoorHum}</div>
+                  <div class="humidity" id="splitOutdoorHum">${outdoorHum !== "—" ? outdoorHum + "% humidity" : "Humidity —"}</div>
                 </div>
               </div>
               <div class="metric-grid">
@@ -1518,13 +1542,9 @@ class HomeWeatherPanel extends HTMLElement {
     const entity = this._escapeHtml(primary.control_entity || primary.climate_entity || "");
     const roomName = this._escapeHtml(primary._roomNameForTts || "Room");
     const modeMap = { cool: "Cool", heat: "Heat", dry: "Dry", fan_only: "Fan" };
-    const modesForUi = ["Cool", "Heat", "Auto", "Dry", "Fan"].filter((m) => {
-      if (m === "Auto") {
-        const lower = (hvacModes || []).map((x) => (x || "").toLowerCase());
-        return lower.includes("heat_cool") || lower.includes("auto");
-      }
-      return allowedModes.some((a) => modeMap[a] === m || a === m.toLowerCase());
-    });
+    const modesForUi = ["Cool", "Heat", "Dry", "Fan"].filter((m) =>
+      allowedModes.some((a) => modeMap[a] === m || a === m.toLowerCase())
+    );
     const hasFanModes = (fanModes || []).length > 0;
     const sliderEnabled = hasFanPct || hasFanModes;
     return `
@@ -1554,8 +1574,8 @@ class HomeWeatherPanel extends HTMLElement {
         </div>
         <div class="mode-grid" id="modeGrid">
           ${modesForUi.map((m) => {
-            const dm = m === "Auto" ? "heat_cool" : (m === "Fan" ? "fan_only" : m.toLowerCase());
-            const active = mode === dm || (m === "Auto" && mode === "heat_cool");
+            const dm = m === "Fan" ? "fan_only" : m.toLowerCase();
+            const active = mode === dm;
             const label = m === "Fan" ? "Fan Only" : m;
             return `<button class="mode-btn ${active ? "active" : ""}" data-mode="${dm}" data-entity="${entity}" data-room-name="${roomName}">${label}</button>`;
           }).join("")}
@@ -2011,6 +2031,12 @@ class HomeWeatherPanel extends HTMLElement {
     if (entityType === "switch") {
       return (entities.switch || []).map((e) => ({ entity_id: e.entity_id, friendly_name: e.friendly_name || e.entity_id }));
     }
+    if (entityType === "schedule") {
+      return (entities.schedules || []).map((e) => ({ entity_id: e.entity_id, friendly_name: e.friendly_name || e.entity_id }));
+    }
+    if (entityType === "proximity") {
+      return (entities.proximity || []).map((e) => ({ entity_id: e.entity_id, friendly_name: e.friendly_name || e.entity_id }));
+    }
     if (entityType === "sensor_switch") {
       const sensors = (entities.sensors || []).map((e) => ({ entity_id: e.entity_id, friendly_name: e.friendly_name || e.entity_id }));
       const switches = (entities.switch || []).map((e) => ({ entity_id: e.entity_id, friendly_name: e.friendly_name || e.entity_id }));
@@ -2110,7 +2136,7 @@ class HomeWeatherPanel extends HTMLElement {
     }
     const ttsSettings = this._config?.tts_settings || {};
     const ttsMessages = ttsSettings.messages || {};
-    const entities = this._entities || { climate: [], sensors: [], persons: [], zones: [], media_players: [], weather: [], notify: [], switch: [], mobile_app_devices: [] };
+    const entities = this._entities || { climate: [], sensors: [], persons: [], zones: [], media_players: [], weather: [], notify: [], switch: [], mobile_app_devices: [], schedules: [], proximity: [] };
 
     const settingsStyles = `
       .settings-view { padding: 0 4px; }
@@ -2129,10 +2155,16 @@ class HomeWeatherPanel extends HTMLElement {
       .settings-section-divider { height: 1px; background: var(--line); margin: 20px 0; }
       .settings-card h4 { margin: 12px 0 8px; font-size: 14px; font-weight: 600; opacity: 0.95; }
       .form-group { margin-bottom: 14px; }
+      .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+      .form-row .form-group { margin-bottom: 0; }
+      @media (max-width: 600px) { .form-row { grid-template-columns: 1fr; } }
       .form-label { display: block; font-size: 12px; margin-bottom: 4px; opacity: 0.9; color: var(--muted); }
       .form-input, .form-select { width: 100%; padding: 10px 12px; clip-path: var(--cut-sm); border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font-size: 13px; }
       .form-select { cursor: pointer; color-scheme: dark; }
       .form-select option { background: var(--panel-2); color: var(--text); }
+      .volume-slider-wrap { display: flex; align-items: center; gap: 12px; }
+      .volume-slider-wrap input[type="range"] { flex: 1; min-width: 0; margin: 0; }
+      .volume-slider-wrap .volume-value { min-width: 36px; font-weight: 700; font-size: 13px; color: var(--ha-blue-soft); }
       .btn-save { margin-top: 16px; padding: 10px 20px; background: var(--ha-blue); color: var(--bg); border: 1px solid var(--line-2); clip-path: var(--cut-sm); cursor: pointer; font-weight: 800; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; }
       .btn-save:hover { background: var(--ha-blue-2); }
       .btn-add { padding: 8px 14px; background: #12202a; color: var(--ha-blue-soft); border: 1px solid rgba(3,169,244,0.3); clip-path: var(--cut-sm); cursor: pointer; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; }
@@ -2299,35 +2331,104 @@ class HomeWeatherPanel extends HTMLElement {
             <label class="form-label">Room name</label>
             <input type="text" class="form-input" data-field="name" value="${this._escapeHtml(room.name || "")}" placeholder="e.g. Bedroom">
           </div>
-          <div class="form-group">
-            <label class="form-label">Comfort temp (°F) – target for heating/cooling</label>
-            <input type="number" class="form-input" data-field="comfort_temp_c" value="${this._cToF(room.comfort_temp_c ?? this._fToC(72))}" step="0.5" data-celsius>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Comfort temp (°F) – target for heating/cooling</label>
+              <input type="number" class="form-input" data-field="comfort_temp_c" value="${this._cToF(room.comfort_temp_c ?? this._fToC(72))}" step="0.5" data-celsius>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Comfort tolerance (°F) – at/near ± this</label>
+              <input type="number" class="form-input" data-field="comfort_tolerance_c" value="${((room.comfort_tolerance_c ?? 1) * 9/5).toFixed(1)}" step="0.1" min="0.9" max="3.6" data-celsius-delta>
+            </div>
           </div>
-          <div class="form-group">
-            <label class="form-label">Comfort tolerance (°F) – at/near = comfort ± this (0.5–2°C)</label>
-            <input type="number" class="form-input" data-field="comfort_tolerance_c" value="${((room.comfort_tolerance_c ?? 1) * 9/5).toFixed(1)}" step="0.1" min="0.9" max="3.6" data-celsius-delta>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Temp sensor</label>
+              ${this._renderEntityAutocomplete(room.temp_sensor || "", "sensor", "temp_sensor", "e.g. sensor.temperature")}
+            </div>
+            <div class="form-group">
+              <label class="form-label">Humidity sensor</label>
+              ${this._renderEntityAutocomplete(room.humidity_sensor || "", "sensor", "humidity_sensor", "e.g. sensor.humidity")}
+            </div>
           </div>
-          <div class="form-group">
-            <label class="form-label">Temp sensor</label>
-            ${this._renderEntityAutocomplete(room.temp_sensor || "", "sensor", "temp_sensor", "e.g. sensor.temperature")}
-          </div>
-          <div class="form-group">
-            <label class="form-label">Humidity sensor</label>
-            ${this._renderEntityAutocomplete(room.humidity_sensor || "", "sensor", "humidity_sensor", "e.g. sensor.humidity")}
-          </div>
-          <div class="form-group">
-            <label class="form-label">Media player (for TTS)</label>
-            <select class="form-select" data-field="media_player">
-              <option value="">— None —</option>${mediaOpts}
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Volume (0-1)</label>
-            <input type="number" class="form-input" data-field="volume" value="${room.volume ?? 0.7}" step="0.1" min="0" max="1">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Media player (for TTS)</label>
+              <select class="form-select" data-field="media_player">
+                <option value="">— None —</option>${mediaOpts}
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Volume (0-1)</label>
+              <div class="volume-slider-wrap">
+                <input type="range" data-field="volume" min="0" max="1" step="0.1" value="${room.volume ?? 0.7}" aria-label="TTS volume">
+                <span class="volume-value">${(room.volume ?? 0.7).toFixed(1)}</span>
+              </div>
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">Notify entity (for this room's notifications)</label>
             ${this._renderEntityDropdown(room.notify_entity || "", "notify", "notify_entity", "Select notify entity")}
+          </div>
+        </div>
+        <div class="settings-section-divider"></div>
+        <div class="settings-section collapsible-subsection">
+          <h4 class="settings-section-title subsection-toggle" data-subsection="room-comfort-${index}">
+            Comfort / Eco / Proximity (AHC)
+            <span class="subsection-chevron">▾</span>
+          </h4>
+          <div class="subsection-content" data-subsection="room-comfort-${index}">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Eco temp (°F) – when away</label>
+              <input type="number" class="form-input" data-field="eco_temp_c" value="${this._cToF(room.eco_temp_c ?? this._fToC(66))}" step="0.5" data-celsius>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Comfort HVAC mode</label>
+              <select class="form-select" data-field="comfort_hvac_mode">
+                <option value="heat" ${(room.comfort_hvac_mode || "heat") === "heat" ? "selected" : ""}>Heat</option>
+                <option value="cool" ${(room.comfort_hvac_mode || "") === "cool" ? "selected" : ""}>Cool</option>
+                <option value="auto" ${(room.comfort_hvac_mode || "") === "auto" ? "selected" : ""}>Auto</option>
+                <option value="heat_cool" ${(room.comfort_hvac_mode || "") === "heat_cool" ? "selected" : ""}>Heat/Cool</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Eco HVAC mode</label>
+              <select class="form-select" data-field="eco_hvac_mode">
+                <option value="heat" ${(room.eco_hvac_mode || "heat") === "heat" ? "selected" : ""}>Heat</option>
+                <option value="cool" ${(room.eco_hvac_mode || "") === "cool" ? "selected" : ""}>Cool</option>
+                <option value="auto" ${(room.eco_hvac_mode || "") === "auto" ? "selected" : ""}>Auto</option>
+                <option value="heat_cool" ${(room.eco_hvac_mode || "") === "heat_cool" ? "selected" : ""}>Heat/Cool</option>
+                <option value="off" ${(room.eco_hvac_mode || "") === "off" ? "selected" : ""}>Off</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Schedule selector (choose active schedule)</label>
+              ${this._renderEntityAutocomplete(room.schedule_selector || "", "schedule", "schedule_selector", "e.g. input_select.schedule")}
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Proximity entity (geo-fencing – replaces zone enter/exit)</label>
+              ${this._renderEntityAutocomplete(room.proximity || "", "proximity", "proximity", "e.g. sensor.proximity_home")}
+            </div>
+            <div class="form-group">
+              <label class="form-label">Proximity duration (min) – how long "towards" before preheat</label>
+              <input type="number" class="form-input" data-field="proximity_duration" value="${room.proximity_duration ?? 5}" min="0">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Proximity distance (m) – within this distance to trigger</label>
+              <input type="number" class="form-input" data-field="proximity_distance" value="${room.proximity_distance ?? 500}" min="0">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Away offset (°F) – subtract from comfort when nobody home</label>
+              <input type="number" class="form-input" data-field="away_offset_c" value="${((room.away_offset_c ?? 2) * 9/5).toFixed(1)}" step="0.5" min="0" data-celsius-delta>
+            </div>
+          </div>
           </div>
         </div>
         <div class="settings-section-divider"></div>
@@ -2417,6 +2518,25 @@ class HomeWeatherPanel extends HTMLElement {
           <div class="form-group">
             <label class="form-label">Exit duration (sec)</label>
             <input type="number" class="form-input" data-field="exit_duration_sec" value="${auto.exit_duration_sec ?? 300}" min="0">
+          </div>
+        </div>
+        <div class="settings-section-divider"></div>
+        <div class="settings-section">
+          <h4 class="settings-section-title">Proximity / geo-fencing (optional – replaces zone enter/exit when set)</h4>
+          <p class="form-label" style="margin-bottom:10px;opacity:0.85;">Use Proximity integration for preheating when approaching home. When set, this overrides zone enter/exit.</p>
+          <div class="form-group">
+            <label class="form-label">Proximity entity</label>
+            ${this._renderEntityAutocomplete(auto.proximity_entity || "", "proximity", "proximity_entity", "e.g. sensor.proximity_home")}
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Arrival duration (min) – preheat after this long approaching</label>
+              <input type="number" class="form-input" data-field="proximity_duration_min" value="${auto.proximity_duration_min ?? 5}" min="0" max="120">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Distance (m) – within this triggers</label>
+              <input type="number" class="form-input" data-field="proximity_distance_m" value="${auto.proximity_distance_m ?? 500}" min="0" max="10000">
+            </div>
           </div>
         </div>
         <div class="settings-section-divider"></div>
@@ -2526,6 +2646,9 @@ class HomeWeatherPanel extends HTMLElement {
         const zoneOffEl = acard.querySelector("[data-field='zone_off']");
         const enterEl = acard.querySelector("[data-field='enter_duration_sec']");
         const exitEl = acard.querySelector("[data-field='exit_duration_sec']");
+        const proximityEntityEl = acard.querySelector("[data-field='proximity_entity']");
+        const proximityDurationEl = acard.querySelector("[data-field='proximity_duration_min']");
+        const proximityDistanceEl = acard.querySelector("[data-field='proximity_distance_m']");
         const isSmartEl = acard.querySelector("[data-field='is_smart_appliance']");
         const isSmart = isSmartEl?.checked !== false;
         const heatEnabledEl = acard.querySelector("[data-field='heat_automation_enabled']");
@@ -2555,6 +2678,7 @@ class HomeWeatherPanel extends HTMLElement {
           debounce_sec: Math.max(1, Math.min(60, parseInt(powerDebounceEl?.value, 10) || 5)),
         };
         const powerSensor = (!isSmart || powerSensorEnabledEl?.checked === true) ? powerSensorConfig : {};
+        const existingAuto = existingApp?.automation || {};
         appliances.push({
           id: existingApp?.id || crypto.randomUUID(),
           device_type: deviceTypeEl?.value || "minisplit",
@@ -2562,12 +2686,16 @@ class HomeWeatherPanel extends HTMLElement {
           is_smart_appliance: isSmart,
           climate_entity: isSmart ? ((climateEl?.value || "").trim() || null) : null,
           automation: {
+            ...existingAuto,
             person_on: (personOnEl?.value || "").trim(),
             zone_on: (zoneOnEl?.value || "").trim(),
             person_off: (personOffEl?.value || "").trim(),
             zone_off: (zoneOffEl?.value || "").trim(),
             enter_duration_sec: parseInt(enterEl?.value, 10) || 30,
             exit_duration_sec: parseInt(exitEl?.value, 10) || 300,
+            proximity_entity: (proximityEntityEl?.value || "").trim(),
+            proximity_duration_min: Math.max(0, Math.min(120, parseInt(proximityDurationEl?.value, 10) || 5)),
+            proximity_distance_m: Math.max(0, Math.min(50000, parseInt(proximityDistanceEl?.value, 10) || 500)),
             heat_automation_enabled: heatEnabledEl?.checked !== false,
             heat_threshold_c: this._fToC(parseFloat(heatEl?.value)) || 18,
             cool_automation_enabled: coolEnabledEl?.checked !== false,
@@ -2577,10 +2705,10 @@ class HomeWeatherPanel extends HTMLElement {
             dry_automation_enabled: dryEnabledEl?.checked === true,
             dry_humidity_threshold_pct: Math.max(0, Math.min(100, parseFloat(dryHumidityEl?.value) || 60)),
             dry_temp_min_c: this._fToC(parseFloat(dryTempMinEl?.value)) ?? 18,
-            seasonal_mode: "outdoor_temp",
-            outdoor_temp_sensor: "",
-            date_winter_start: "11-01",
-            date_winter_end: "03-31",
+            seasonal_mode: existingAuto.seasonal_mode || "outdoor_temp",
+            outdoor_temp_sensor: existingAuto.outdoor_temp_sensor || "",
+            date_winter_start: existingAuto.date_winter_start || "11-01",
+            date_winter_end: existingAuto.date_winter_end || "03-31",
           },
           power_sensor: powerSensor,
         });

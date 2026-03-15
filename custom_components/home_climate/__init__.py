@@ -44,6 +44,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .presence_tracker import async_start_presence_tracker
     await async_start_presence_tracker(hass, config_manager)
 
+    # Start window tracker (AHC Phase 3)
+    from .window_tracker import async_start_window_tracker
+    await async_start_window_tracker(hass, config_manager)
+
     # Listen for options updates
     entry.async_on_unload(entry.add_update_listener(async_options_update_listener))
 

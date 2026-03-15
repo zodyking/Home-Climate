@@ -97,6 +97,27 @@ PRESENCE_CHECK_INTERVAL = 5  # seconds for presence state polling
 # Default room comfort (Celsius)
 DEFAULT_COMFORT_TEMP_C = 22.0
 DEFAULT_COMFORT_TOLERANCE_C = 1.0  # deadband: at/near = comfort ± tolerance (0.5-2)
+DEFAULT_ECO_TEMP_C = 19.0
+DEFAULT_COMFORT_HVAC_MODE = "heat"
+DEFAULT_ECO_HVAC_MODE = "heat"
+DEFAULT_PROXIMITY_DURATION_MIN = 5
+DEFAULT_PROXIMITY_DISTANCE_M = 500
+DEFAULT_PRESENCE_REACTION_ON_SEC = 30
+DEFAULT_PRESENCE_REACTION_OFF_SEC = 300
+DEFAULT_PEOPLE_ENTER_DURATION_MIN = 0
+DEFAULT_PEOPLE_LEAVE_DURATION_MIN = 0
+DEFAULT_AWAY_OFFSET_C = 2.0
+DEFAULT_FROST_PROTECTION_TEMP_C = 5.0
+DEFAULT_FROST_PROTECTION_DURATION_MIN = 60
+DEFAULT_WINDOW_REACTION_OPEN_SEC = 300
+DEFAULT_WINDOW_REACTION_CLOSE_SEC = 600
+DEFAULT_WINDOW_OPEN_TEMP_C = 5.0
+DEFAULT_AGGRESSIVE_RANGE_C = 0.5
+DEFAULT_AGGRESSIVE_OFFSET_C = 0.5
+DEFAULT_VALVE_OPEN_DIFFERENCE_C = 2.0
+DEFAULT_VALVE_STEP = 10
+DEFAULT_VALVE_MAX_OPEN_PCT = 100
+DEFAULT_VALVE_TIMEOUT_SEC = 300
 
 # Default automation thresholds (Celsius)
 DEFAULT_HEAT_THRESHOLD_C = 18
@@ -161,6 +182,59 @@ def default_appliance_automation() -> dict:
         "date_winter_end": DEFAULT_DATE_WINTER_END,
         "outdoor_cool_only_above_c": DEFAULT_OUTDOOR_COOL_ONLY_ABOVE_C,
         "outdoor_heat_only_below_c": DEFAULT_OUTDOOR_HEAT_ONLY_BELOW_C,
+        # AHC Phase 1+: proximity, windows, frost, liming, valve, tweaks
+        "proximity_entity": "",
+        "proximity_duration_min": DEFAULT_PROXIMITY_DURATION_MIN,
+        "proximity_distance_m": DEFAULT_PROXIMITY_DISTANCE_M,
+        "adjustments": [],
+        "force_max_temp": [],
+        "force_eco_temp": [],
+        "party_mode": [],
+        "party_legacy_restore": False,
+        "windows": [],
+        "window_reaction_open_sec": DEFAULT_WINDOW_REACTION_OPEN_SEC,
+        "window_reaction_close_sec": DEFAULT_WINDOW_REACTION_CLOSE_SEC,
+        "window_open_temp_c": DEFAULT_WINDOW_OPEN_TEMP_C,
+        "window_legacy_restore": False,
+        "min_instead_of_off": False,
+        "reset_temperature": False,
+        "off_if_above_room_temp": False,
+        "off_if_nobody_home": False,
+        "ui_change_enabled": False,
+        "physical_change_enabled": False,
+        "frost_protection_temp_c": DEFAULT_FROST_PROTECTION_TEMP_C,
+        "frost_protection_duration_min": DEFAULT_FROST_PROTECTION_DURATION_MIN,
+        "liming_protection": False,
+        "liming_day": "sunday",
+        "liming_time": "03:00",
+        "liming_duration_min": 5,
+        "liming_in_winter": True,
+        "winter_mode": "",
+        "invert_winter_mode": False,
+        "outside_temp_threshold": None,
+        "fallback_outside_unavailable": False,
+        "room_temp_threshold": None,
+        "idle_temp_c": None,
+        "calibration_keyword": "",
+        "calibration_timeout": 300,
+        "calibration_delta": 0.5,
+        "calibration_step": 0.5,
+        "calibration_generic": False,
+        "calibration_generic_offset": 0.0,
+        "aggressive_range": DEFAULT_AGGRESSIVE_RANGE_C,
+        "aggressive_offset": DEFAULT_AGGRESSIVE_OFFSET_C,
+        "aggressive_calibration": False,
+        "valve_positioning_mode": "",
+        "valve_open_difference": DEFAULT_VALVE_OPEN_DIFFERENCE_C,
+        "valve_step": DEFAULT_VALVE_STEP,
+        "valve_max_open": DEFAULT_VALVE_MAX_OPEN_PCT,
+        "valve_timeout": DEFAULT_VALVE_TIMEOUT_SEC,
+        "valve_entity_keyword": "",
+        "action_call_delay": 0,
+        "startup_delay": 0,
+        "custom_action": "",
+        "custom_condition": "",
+        "custom_condition_calibration": "",
     }
 
 

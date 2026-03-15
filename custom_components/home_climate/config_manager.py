@@ -12,9 +12,13 @@ from homeassistant.core import HomeAssistant
 
 from .const import (
     CONFIG_FILE,
+    DEFAULT_AWAY_OFFSET_C,
+    DEFAULT_COMFORT_HVAC_MODE,
     DEFAULT_COMFORT_TEMP_C,
     DEFAULT_COMFORT_TOLERANCE_C,
     DEFAULT_CONFIG,
+    DEFAULT_ECO_HVAC_MODE,
+    DEFAULT_ECO_TEMP_C,
     DEFAULT_COOL_THRESHOLD_C,
     DEFAULT_DRY_HUMIDITY_THRESHOLD_PCT,
     DEFAULT_DRY_TEMP_MIN_C,
@@ -26,6 +30,10 @@ from .const import (
     DEFAULT_OUTDOOR_HEAT_ONLY_BELOW_C,
     DEFAULT_POWER_DEBOUNCE_SEC,
     DEFAULT_POWER_THRESHOLD_W,
+    DEFAULT_PRESENCE_REACTION_OFF_SEC,
+    DEFAULT_PRESENCE_REACTION_ON_SEC,
+    DEFAULT_PROXIMITY_DISTANCE_M,
+    DEFAULT_PROXIMITY_DURATION_MIN,
     DEVICE_TYPES,
     NOTIFICATION_EVENT_KEYS,
     SEASONAL_MODES,
@@ -316,6 +324,8 @@ class ConfigManager:
             comfort_temp = max(5, min(40, _safe_float(room.get("comfort_temp_c"), DEFAULT_COMFORT_TEMP_C)))
             comfort_tolerance = max(0.5, min(2.0, _safe_float(room.get("comfort_tolerance_c"), DEFAULT_COMFORT_TOLERANCE_C)))
 
+            # AHC Phase 1 room-level additions
+            eco_temp = max(4, min(75, _safe_float(room.get("eco_temp_c"), DEFAULT_ECO_TEMP_C)))
             validated.append({
                 "id": room_id,
                 "name": str(room.get("name", "")).strip(),
@@ -326,6 +336,22 @@ class ConfigManager:
                 "notify_entity": str(room.get("notify_entity", "")).strip() or "",
                 "comfort_temp_c": comfort_temp,
                 "comfort_tolerance_c": comfort_tolerance,
+                "eco_temp_c": eco_temp,
+                "comfort_hvac_mode": str(room.get("comfort_hvac_mode") or DEFAULT_COMFORT_HVAC_MODE).strip() or DEFAULT_COMFORT_HVAC_MODE,
+                "eco_hvac_mode": str(room.get("eco_hvac_mode") or DEFAULT_ECO_HVAC_MODE).strip() or DEFAULT_ECO_HVAC_MODE,
+                "schedule_entities": [str(x).strip() for x in (room.get("schedule_entities") or []) if str(x).strip()],
+                "schedule_selector": str(room.get("schedule_selector") or "").strip() or "",
+                "proximity": str(room.get("proximity") or "").strip() or "",
+                "proximity_duration": max(0, min(120, _safe_int(room.get("proximity_duration"), DEFAULT_PROXIMITY_DURATION_MIN))),
+                "proximity_distance": max(0, min(10000, _safe_int(room.get("proximity_distance"), DEFAULT_PROXIMITY_DISTANCE_M))),
+                "presence_sensor": str(room.get("presence_sensor") or "").strip() or "",
+                "presence_schedule": str(room.get("presence_schedule") or "").strip() or "",
+                "presence_reaction_on_sec": max(0, min(3600, _safe_int(room.get("presence_reaction_on_sec"), DEFAULT_PRESENCE_REACTION_ON_SEC))),
+                "presence_reaction_off_sec": max(0, min(3600, _safe_int(room.get("presence_reaction_off_sec"), DEFAULT_PRESENCE_REACTION_OFF_SEC))),
+                "away_offset_c": max(0, min(10, _safe_float(room.get("away_offset_c"), DEFAULT_AWAY_OFFSET_C))),
+                "guest_mode": str(room.get("guest_mode") or "").strip() or "",
+                "people_enter_duration": max(0, min(120, _safe_int(room.get("people_enter_duration"), 0))),
+                "people_leave_duration": max(0, min(120, _safe_int(room.get("people_leave_duration"), 0))),
                 "tts_overrides": dict(room.get("tts_overrides") or {}),
                 "appliances": self._validate_appliances(room.get("appliances") or [], {"comfort_temp_c": comfort_temp}),
             })
@@ -350,8 +376,12 @@ class ConfigManager:
             auto_raw = app.get("automation") or {}
             auto = {}
             for k, default_val in default_auto.items():
-                if k in ("person", "zone", "person_on", "zone_on", "person_off", "zone_off", "outdoor_temp_sensor", "date_winter_start", "date_winter_end"):
-                    auto[k] = str(auto_raw.get(k, default_val)).strip() or default_val
+                if k in ("person", "zone", "person_on", "zone_on", "person_off", "zone_off", "outdoor_temp_sensor", "date_winter_start", "date_winter_end",
+                         "proximity_entity", "winter_mode", "calibration_keyword", "valve_entity_keyword", "valve_positioning_mode",
+                         "custom_action", "custom_condition", "custom_condition_calibration"):
+                    auto[k] = str(auto_raw.get(k, default_val)).strip() if default_val != "" else (str(auto_raw.get(k, default_val)).strip() or default_val)
+                    if isinstance(default_val, str) and default_val == "":
+                        auto[k] = str(auto_raw.get(k, default_val)).strip() or default_val
                 elif k in ("enter_duration_sec", "exit_duration_sec"):
                     auto[k] = max(0, min(3600, _safe_int(auto_raw.get(k), default_val)))
                 elif k in ("heat_threshold_c", "cool_threshold_c"):

@@ -170,7 +170,7 @@ async def websocket_get_entities(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Get available entities from entity registry (climate, sensors, persons, zones, media_players, switches, notify)."""
+    """Get available entities from entity registry (climate, sensors, persons, zones, schedules, proximity, etc)."""
     entity_type = msg.get("entity_type")
     result: dict[str, list[dict[str, Any]]] = {
         "climate": [],
@@ -181,6 +181,8 @@ async def websocket_get_entities(
         "weather": [],
         "notify": [],
         "switch": [],
+        "schedules": [],
+        "proximity": [],
         "mobile_app_devices": [],
     }
 
@@ -193,6 +195,7 @@ async def websocket_get_entities(
         ("weather", "weather"),
         ("notify", "notify"),
         ("switch", "switch"),
+        ("schedule", "schedules"),
     ]
     for domain, key in domains:
         if entity_type is not None and entity_type != key and entity_type != domain:

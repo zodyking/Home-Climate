@@ -51,19 +51,20 @@ def _build_presence_rules(config_manager: "ConfigManager") -> list[dict[str, Any
     Build presence rules from room.appliances[].automation.
 
     Each appliance with person_on+zone_on (and person_off+zone_off) configured becomes a rule.
-    control_entity: climate_entity (smart) or switch (simple).
-    Returns list of {room, appliance, control_entity, climate_entity, person_on, zone_on, ...}.
+    Skips appliances that have proximity_entity set (those use proximity rules instead).
     """
     rules = []
     for room in config_manager.rooms:
         for appliance in room.get("appliances", []):
+            auto = appliance.get("automation") or {}
+            if (auto.get("proximity_entity") or "").strip():
+                continue  # Use proximity instead
             is_smart = appliance.get("is_smart_appliance", True)
             climate_entity = (appliance.get("climate_entity") or "").strip()
             switch_entity = config_manager.get_appliance_switch_entity(appliance)
             control_entity = climate_entity if is_smart and climate_entity else (switch_entity or "")
             if not control_entity:
                 continue
-            auto = appliance.get("automation") or {}
             person_on = (auto.get("person_on") or "").strip()
             zone_on = (auto.get("zone_on") or "").strip()
             person_off = (auto.get("person_off") or person_on or "").strip()
@@ -88,6 +89,63 @@ def _build_presence_rules(config_manager: "ConfigManager") -> list[dict[str, Any
     return rules
 
 
+def _build_proximity_rules(config_manager: "ConfigManager") -> list[dict[str, Any]]:
+    """
+    Build proximity/geo-fencing rules from room.appliances[].automation.
+
+    Appliances with proximity_entity configured use AHC-style proximity logic:
+    - Turn ON: direction in (towards, arrived) and distance <= threshold, sustained for duration
+    - Turn OFF: direction in (away_from) or distance > threshold, sustained for duration
+    """
+    rules = []
+    for room in config_manager.rooms:
+        for appliance in room.get("appliances", []):
+            auto = appliance.get("automation") or {}
+            proximity_entity = (auto.get("proximity_entity") or "").strip()
+            if not proximity_entity:
+                continue
+            is_smart = appliance.get("is_smart_appliance", True)
+            climate_entity = (appliance.get("climate_entity") or "").strip()
+            switch_entity = config_manager.get_appliance_switch_entity(appliance)
+            control_entity = climate_entity if is_smart and climate_entity else (switch_entity or "")
+            if not control_entity:
+                continue
+            duration_min = max(0, min(120, int(auto.get("proximity_duration_min") or 5)))
+            distance_m = max(0, min(50000, int(auto.get("proximity_distance_m") or 500)))
+            rules.append({
+                "room": room,
+                "appliance": appliance,
+                "control_entity": control_entity,
+                "climate_entity": climate_entity,
+                "is_smart": is_smart,
+                "proximity_entity": proximity_entity,
+                "proximity_duration_sec": duration_min * 60,
+                "proximity_distance_m": distance_m,
+            })
+    return rules
+
+
+def _proximity_is_approaching(direction_state: str | None) -> bool:
+    """True if direction indicates approaching or arrived (towards, arrived)."""
+    if not direction_state:
+        return False
+    s = str(direction_state).lower().strip()
+    return s in ("towards", "arrived")
+
+
+def _proximity_is_leaving(direction_state: str | None) -> bool:
+    """True if direction indicates away (away_from). stationary/unknown = ambiguous."""
+    if not direction_state:
+        return True
+    s = str(direction_state).lower().strip()
+    return s in ("away_from",)
+
+
+def _proximity_rule_key(rule: dict[str, Any]) -> str:
+    """Unique key for a proximity rule."""
+    return f"prox|{rule.get('proximity_entity')}|{rule.get('control_entity')}"
+
+
 def _enter_rule_key(rule: dict[str, Any]) -> str:
     """Unique key for enter task."""
     return f"enter|{rule.get('person_on')}|{rule.get('zone_on')}|{rule.get('control_entity')}"
@@ -107,6 +165,8 @@ class PresenceTracker:
         self._unsubscribe: list[Any] = []
         self._enter_tasks: dict[str, asyncio.Task] = {}
         self._exit_tasks: dict[str, asyncio.Task] = {}
+        self._proximity_enter_tasks: dict[str, asyncio.Task] = {}
+        self._proximity_exit_tasks: dict[str, asyncio.Task] = {}
 
     async def async_stop(self) -> None:
         """Stop the presence tracker."""
@@ -140,6 +200,87 @@ class PresenceTracker:
                 self._on_person_state_change_event,
             )
             self._unsubscribe.append(unsub)
+
+        self._setup_proximity_listeners()
+
+    def _setup_proximity_listeners(self) -> None:
+        """Set up state listeners for proximity entities (AHC-style geo-fencing)."""
+        rules = _build_proximity_rules(self.config_manager)
+        proximity_entities: set[str] = set()
+        for rule in rules:
+            ent = (rule.get("proximity_entity") or "").strip()
+            if ent:
+                proximity_entities.add(ent)
+        if proximity_entities:
+            unsub = async_track_state_change_event(
+                self.hass,
+                list(proximity_entities),
+                self._on_proximity_state_change_event,
+            )
+            self._unsubscribe.append(unsub)
+
+    @callback
+    def _on_proximity_state_change_event(self, event) -> None:
+        """Handle proximity entity state change (direction sensor)."""
+        data = event.data
+        self._on_proximity_state_change(
+            data["entity_id"],
+            data.get("old_state"),
+            data.get("new_state"),
+        )
+
+    @callback
+    def _on_proximity_state_change(
+        self, entity_id: str, old_state: Any, new_state: Any
+    ) -> None:
+        """Handle proximity direction change: towards/arrived = on, away_from = off."""
+        old_val = old_state.state if old_state else None
+        new_val = new_state.state if new_state else None
+
+        rules = _build_proximity_rules(self.config_manager)
+        for rule in rules:
+            if (rule.get("proximity_entity") or "").strip() != entity_id:
+                continue
+            control_entity = (rule.get("control_entity") or "").strip()
+            if not control_entity:
+                continue
+            duration_sec = int(rule.get("proximity_duration_sec") or 300)
+            prox_key = _proximity_rule_key(rule)
+            enter_key = f"prox_enter|{prox_key}"
+            exit_key = f"prox_exit|{prox_key}"
+
+            distance_entity = (entity_id.replace("_direction", "_distance").replace("_dir", "")
+                if "_direction" in entity_id or "_dir" in entity_id else "")
+            distance_m = rule.get("proximity_distance_m") or 500
+            if distance_entity:
+                dstate = self.hass.states.get(distance_entity)
+                try:
+                    dist_val = float(dstate.state) if dstate and dstate.state not in ("unknown", "unavailable") else 99999
+                except (ValueError, TypeError):
+                    dist_val = 99999
+                within_distance = dist_val <= distance_m
+            else:
+                within_distance = True
+
+            now_approaching = _proximity_is_approaching(new_val) and within_distance
+            was_approaching = _proximity_is_approaching(old_val) and within_distance
+            now_leaving = _proximity_is_leaving(new_val) or (not within_distance if distance_entity else False)
+            was_leaving = _proximity_is_leaving(old_val) or (not within_distance if distance_entity else False)
+
+            if now_approaching and not was_approaching:
+                if self._enter_tasks.get(enter_key) and not self._enter_tasks[enter_key].done():
+                    self._enter_tasks[enter_key].cancel()
+                    self._enter_tasks.pop(enter_key, None)
+                self._enter_tasks[enter_key] = asyncio.create_task(
+                    self._proximity_enter_delayed(rule, duration_sec)
+                )
+            if now_leaving and not was_leaving:
+                if self._exit_tasks.get(exit_key) and not self._exit_tasks[exit_key].done():
+                    self._exit_tasks[exit_key].cancel()
+                    self._exit_tasks.pop(exit_key, None)
+                self._exit_tasks[exit_key] = asyncio.create_task(
+                    self._proximity_exit_delayed(rule, duration_sec)
+                )
 
     @callback
     def _on_person_state_change_event(self, event) -> None:
@@ -353,6 +494,173 @@ class PresenceTracker:
             )
         except Exception as e:
             _LOGGER.error("Presence exit: failed for %s: %s", control_entity, e)
+
+    async def _proximity_enter_delayed(self, rule: dict[str, Any], delay_sec: int) -> None:
+        """After delay, if still approaching (towards/arrived and within distance), turn on appliance."""
+        await asyncio.sleep(delay_sec)
+        enter_key = f"prox_enter|{_proximity_rule_key(rule)}"
+        self._enter_tasks.pop(enter_key, None)
+
+        prox_entity = (rule.get("proximity_entity") or "").strip()
+        control_entity = (rule.get("control_entity") or "").strip()
+        distance_m = int(rule.get("proximity_distance_m") or 500)
+        room = rule.get("room") or {}
+        is_smart = rule.get("is_smart", True)
+        climate_entity = (rule.get("climate_entity") or "").strip()
+
+        dir_state = self.hass.states.get(prox_entity)
+        dir_val = dir_state.state if dir_state else None
+        if not _proximity_is_approaching(dir_val):
+            return
+        distance_entity = _infer_distance_entity(prox_entity)
+        if distance_entity:
+            dist_state = self.hass.states.get(distance_entity)
+            if dist_state and dist_state.state not in ("unknown", "unavailable"):
+                try:
+                    dist_val = float(dist_state.state)
+                    if dist_val > distance_m:
+                        return
+                except (ValueError, TypeError):
+                    pass
+
+        if not is_smart:
+            await self.hass.services.async_call(
+                "switch", "turn_on", {ATTR_ENTITY_ID: control_entity}, blocking=True,
+            )
+        else:
+            from .power_detector import get_appliance_power_state, get_appliance_power_switch
+            power_switch = get_appliance_power_switch(self.config_manager, control_entity)
+            if power_switch:
+                await self.hass.services.async_call(
+                    "switch", "turn_on", {ATTR_ENTITY_ID: power_switch}, blocking=True,
+                )
+            else:
+                power_state = get_appliance_power_state(
+                    self.hass, self.config_manager, control_entity
+                )
+                if power_state == "off":
+                    _LOGGER.debug(
+                        "Skipping proximity turn_on for %s: power sensor reports off",
+                        control_entity,
+                    )
+                    return
+                await self.hass.services.async_call(
+                    "climate", "turn_on", {ATTR_ENTITY_ID: climate_entity}, blocking=True,
+                )
+            comfort_temp = float(room.get("comfort_temp_c", 22.0))
+            temp_sensor = (room.get("temp_sensor") or "").strip()
+            room_temp = comfort_temp
+            if temp_sensor:
+                tstate = self.hass.states.get(temp_sensor)
+                if tstate and tstate.state not in ("unknown", "unavailable"):
+                    unit = tstate.attributes.get("unit_of_measurement") if tstate.attributes else None
+                    parsed = parse_temp_from_state(tstate.state, unit)
+                    if parsed is not None:
+                        room_temp = parsed
+            mode = "heat" if room_temp < comfort_temp else "cool"
+            min_t, max_t = 16.0, 30.0
+            if climate_entity:
+                cstate = self.hass.states.get(climate_entity)
+                if cstate:
+                    attrs = cstate.attributes or {}
+                    try:
+                        min_t = float(attrs.get("min_temp", 16))
+                        max_t = float(attrs.get("max_temp", 30))
+                    except (ValueError, TypeError):
+                        pass
+            set_temp = max_t if mode == "heat" else min_t
+            await self.hass.services.async_call(
+                "climate", "set_hvac_mode",
+                {ATTR_ENTITY_ID: climate_entity, "hvac_mode": mode},
+                blocking=True,
+            )
+            await self.hass.services.async_call(
+                "climate", "set_temperature",
+                {ATTR_ENTITY_ID: climate_entity, "temperature": set_temp},
+                blocking=True,
+            )
+
+        try:
+            from .tts_event import async_send_tts_for_event
+            from .notification_event import async_send_notification_for_event
+            prox_name = _entity_friendly_name(self.hass, prox_entity)
+            format_vars = {"person_name": "Proximity", "zone_name": prox_name}
+            await async_send_tts_for_event(
+                self.hass, self.config_manager, control_entity,
+                TTS_PRESENCE_ENTER, **format_vars,
+            )
+            await async_send_notification_for_event(
+                self.hass, self.config_manager, control_entity,
+                TTS_PRESENCE_ENTER, **format_vars,
+            )
+        except Exception as e:
+            _LOGGER.error("Proximity enter: failed for %s: %s", control_entity, e)
+
+    async def _proximity_exit_delayed(self, rule: dict[str, Any], delay_sec: int) -> None:
+        """After delay, if still leaving (away_from or distance > threshold), turn off appliance."""
+        await asyncio.sleep(delay_sec)
+        exit_key = f"prox_exit|{_proximity_rule_key(rule)}"
+        self._exit_tasks.pop(exit_key, None)
+
+        prox_entity = (rule.get("proximity_entity") or "").strip()
+        control_entity = (rule.get("control_entity") or "").strip()
+        distance_m = int(rule.get("proximity_distance_m") or 500)
+        is_smart = rule.get("is_smart", True)
+        climate_entity = (rule.get("climate_entity") or "").strip()
+
+        dir_state = self.hass.states.get(prox_entity)
+        dir_val = dir_state.state if dir_state else None
+        if _proximity_is_approaching(dir_val):
+            return
+        distance_entity = _infer_distance_entity(prox_entity)
+        if distance_entity:
+            dist_state = self.hass.states.get(distance_entity)
+            if dist_state and dist_state.state not in ("unknown", "unavailable"):
+                try:
+                    dist_val = float(dist_state.state)
+                    if dist_val <= distance_m and _proximity_is_approaching(dir_val):
+                        return
+                except (ValueError, TypeError):
+                    pass
+
+        if not is_smart:
+            await self.hass.services.async_call(
+                "switch", "turn_off", {ATTR_ENTITY_ID: control_entity}, blocking=True,
+            )
+        else:
+            from .power_detector import get_appliance_power_switch
+            power_switch = get_appliance_power_switch(self.config_manager, control_entity)
+            if power_switch:
+                await self.hass.services.async_call(
+                    "switch", "turn_off", {ATTR_ENTITY_ID: power_switch}, blocking=True,
+                )
+            else:
+                await self.hass.services.async_call(
+                    "climate", "turn_off", {ATTR_ENTITY_ID: climate_entity}, blocking=True,
+                )
+
+        try:
+            from .tts_event import async_send_tts_for_event
+            from .notification_event import async_send_notification_for_event
+            prox_name = _entity_friendly_name(self.hass, prox_entity)
+            format_vars = {"person_name": "Proximity", "zone_name": prox_name}
+            await async_send_tts_for_event(
+                self.hass, self.config_manager, control_entity,
+                TTS_PRESENCE_LEAVE, **format_vars,
+            )
+            await async_send_notification_for_event(
+                self.hass, self.config_manager, control_entity,
+                TTS_PRESENCE_LEAVE, **format_vars,
+            )
+        except Exception as e:
+            _LOGGER.error("Proximity exit: failed for %s: %s", control_entity, e)
+
+
+def _infer_distance_entity(direction_entity: str) -> str | None:
+    """Infer distance sensor entity from direction entity (HA proximity naming)."""
+    if not direction_entity or "_direction" not in direction_entity:
+        return None
+    return direction_entity.replace("_direction", "_distance").replace("_dir", "")
 
 
 async def async_start_presence_tracker(

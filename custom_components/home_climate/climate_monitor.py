@@ -13,6 +13,8 @@ from homeassistant.const import ATTR_ENTITY_ID
 from .const import (
     CLIMATE_CHECK_INTERVAL,
     CLIMATE_SET_TEMP_INTERVAL,
+    DEFAULT_COMFORT_TEMP_C,
+    DEFAULT_ECO_TEMP_C,
     DEFAULT_DRY_HUMIDITY_THRESHOLD_PCT,
     DEFAULT_DRY_TEMP_MIN_C,
     DOMAIN,
@@ -23,6 +25,7 @@ from .const import (
     TTS_COMFORT_REVERT,
     TTS_SEASONAL_BLOCKED,
 )
+from .schedule_evaluator import evaluate_schedule
 
 if TYPE_CHECKING:
     from .config_manager import ConfigManager
