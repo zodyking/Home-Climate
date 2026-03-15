@@ -125,6 +125,30 @@ const STYLES = `
   .overview-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.05fr 0.95fr; gap: clamp(10px, 1.5vw, 18px); }
   .overview-grid.overview-split-layout { display: flex; flex-direction: column; gap: 14px; }
   .split-temp-card.split-temp-primary { flex: 0 0 auto; min-height: 180px; }
+  .climate-overview-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: clamp(8px, 1vw, 14px);
+    align-items: stretch;
+    flex: 0 0 auto;
+    min-height: 140px;
+  }
+  @media (max-width: 599px) {
+    .climate-overview-row { flex-direction: column; }
+  }
+  .climate-overview-card {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    clip-path: var(--cut);
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .climate-overview-card.climate-overview-indoor,
+  .climate-overview-card.climate-overview-outdoor { flex: 1; min-width: clamp(100px, 20vw, 180px); }
+  .climate-overview-card.climate-overview-delta { flex: 0.6; min-width: clamp(80px, 15vw, 140px); }
   .overview-left { display: flex; flex-direction: column; justify-content: space-between; min-height: 0; }
   .temp-wrap { display: flex; align-items: flex-start; gap: 10px; }
   .ambient-temp { font-size: clamp(86px, 8vw, 136px); line-height: 0.84; font-weight: 900; letter-spacing: -0.09em; color: var(--text); }
@@ -665,7 +689,7 @@ const STYLES = `
   .data-item .warn { color: var(--warn); }
   .data-item .blue { color: var(--ha-blue-soft); }
   .footer-label { position: absolute; right: 24px; bottom: 18px; font-size: 11px; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; }
-  @media (min-width: 600px) {
+  @media (min-width: 1080px) {
     .topbar { grid-template-columns: 1fr clamp(48px, 7vw, 64px); }
     .topbar #menu-btn { display: none !important; }
   }
@@ -816,12 +840,11 @@ class HomeWeatherPanel extends HTMLElement {
     const root = this.shadowRoot;
     if (!root || !newData?.rooms || !prevData?.rooms) return false;
     const hasSummary = root.querySelector(".summary-card");
-    const hasOverviewSplit = root.querySelector("#splitIndoorTemp");
-    if (!hasSummary && !hasOverviewSplit) return false;
+    const hasOverviewRow = root.querySelector("#overviewIndoorTemp") || root.querySelector(".climate-overview-row");
+    if (!hasSummary && !hasOverviewRow) return false;
 
     const newRooms = newData.rooms || [];
     const prevRooms = prevData.rooms || [];
-
     const outdoor = newData.outdoor || { temp: null, humidity: null };
     const indoor = newData.indoor_aggregate || { temp: null, humidity: null };
     const outdoorTemp = outdoor.temp != null ? this._cToF(outdoor.temp).toFixed(1) : "—";
@@ -831,21 +854,32 @@ class HomeWeatherPanel extends HTMLElement {
     const unit = DISPLAY_UNIT;
     const thermalDelta = (indoor.temp != null && outdoor.temp != null) ? Math.round(Math.abs(this._cToF(indoor.temp) - this._cToF(outdoor.temp))) : "—";
 
-    if (hasOverviewSplit) {
-      const splitIndoorTemp = root.querySelector("#splitIndoorTemp");
-      const splitIndoorHum = root.querySelector("#splitIndoorHum");
-      const splitOutdoorTemp = root.querySelector("#splitOutdoorTemp");
-      const splitOutdoorHum = root.querySelector("#splitOutdoorHum");
-      if (splitIndoorTemp) splitIndoorTemp.textContent = indoorTemp !== "—" ? indoorTemp + unit : indoorTemp;
-      if (splitIndoorHum) splitIndoorHum.textContent = indoorHum !== "—" ? "Humidity " + indoorHum + "%" : "Humidity —";
-      if (splitOutdoorTemp) splitOutdoorTemp.textContent = outdoorTemp !== "—" ? outdoorTemp + unit : outdoorTemp;
-      if (splitOutdoorHum) splitOutdoorHum.textContent = outdoorHum !== "—" ? "Humidity " + outdoorHum + "%" : "Humidity —";
-      const thermalEl = root.querySelector(".overview .metric-grid .metric:nth-child(2) .value");
-      if (thermalEl) thermalEl.textContent = thermalDelta !== "—" ? thermalDelta + "°" : thermalDelta;
+    const primary = this._getPrimaryAppliance(newData, this._selectedRoomId, this._selectedApplianceEntity);
+    const tempUnit = newRooms[0]?.temperature_unit || "°F";
+    const ambientTemp = indoor.temp != null ? Math.round(this._cToF(indoor.temp)) : (newRooms[0]?.temp != null ? Math.round(tempUnit === "°C" ? this._cToF(newRooms[0].temp) : newRooms[0].temp) : "—");
+    const setpointRaw = primary?.target_temp;
+    const setpoint = primary && setpointRaw != null ? Math.round(tempUnit === "°C" ? this._cToF(setpointRaw) : setpointRaw) : "—";
+    const targetDelta = (typeof ambientTemp === "number" && typeof setpoint === "number")
+      ? Math.round(Math.abs(ambientTemp - setpoint))
+      : "—";
+
+    if (hasOverviewRow) {
+      const overviewIndoorTemp = root.querySelector("#overviewIndoorTemp");
+      const overviewIndoorHum = root.querySelector("#overviewIndoorHum");
+      const overviewOutdoorTemp = root.querySelector("#overviewOutdoorTemp");
+      const overviewOutdoorHum = root.querySelector("#overviewOutdoorHum");
+      const overviewThermalDelta = root.querySelector("#overviewThermalDelta");
+      if (overviewIndoorTemp) overviewIndoorTemp.textContent = indoorTemp !== "—" ? indoorTemp + unit : indoorTemp;
+      if (overviewIndoorHum) overviewIndoorHum.textContent = indoorHum !== "—" ? indoorHum + "% humidity" : "Humidity —";
+      if (overviewOutdoorTemp) overviewOutdoorTemp.textContent = outdoorTemp !== "—" ? outdoorTemp + unit : outdoorTemp;
+      if (overviewOutdoorHum) overviewOutdoorHum.textContent = outdoorHum !== "—" ? outdoorHum + "% humidity" : "Humidity —";
+      if (overviewThermalDelta) overviewThermalDelta.textContent = thermalDelta !== "—" ? thermalDelta + "°" : thermalDelta;
       const humMetric = root.querySelector(".overview .metric-grid .metric:nth-child(1) .value");
       if (humMetric) humMetric.textContent = indoorHum !== "—" ? indoorHum + "%" : indoorHum;
       const humMetricSub = root.querySelector(".overview .metric-grid .metric:nth-child(1) .sub");
       if (humMetricSub) humMetricSub.textContent = parseFloat(indoorHum) >= 40 && parseFloat(indoorHum) <= 60 ? "Balanced" : "—";
+      const targetDeltaMetric = root.querySelector(".overview .metric-grid .metric:nth-child(2) .value");
+      if (targetDeltaMetric) targetDeltaMetric.textContent = targetDelta !== "—" ? targetDelta + "°" : targetDelta;
       const dewPointMetric = root.querySelector(".overview .metric-grid .metric:nth-child(3) .value");
       const dewPointSub = root.querySelector(".overview .metric-grid .metric:nth-child(3) .sub");
       if (dewPointMetric || dewPointSub) {
@@ -1244,6 +1278,9 @@ class HomeWeatherPanel extends HTMLElement {
       : "—";
     const setpointRaw = primary?.target_temp;
     const setpoint = primary && setpointRaw != null ? Math.round(tempUnit === "°C" ? this._cToF(setpointRaw) : setpointRaw) : "—";
+    const targetDelta = (typeof ambientTemp === "number" && typeof setpoint === "number")
+      ? Math.round(Math.abs(ambientTemp - setpoint))
+      : "—";
     const modeLabel = primary ? this._modeLabel((primary.climate_mode || primary.climate_state || "off").toLowerCase()) : "—";
     const hvacAction = primary?.hvac_action || null;
     const compressorLabel = hvacAction && ["heating", "cooling"].includes(hvacAction) ? "Active" : (hvacAction === "idle" ? "Idle" : "—");
@@ -1260,16 +1297,27 @@ class HomeWeatherPanel extends HTMLElement {
               <div class="mini-badge">Core</div>
             </div>
             <div class="overview-grid overview-split-layout">
-              <div class="split-temp-card split-temp-primary">
-                <div class="split-half split-indoor">
-                  <div class="label">Indoor</div>
-                  <div class="temp" id="splitIndoorTemp">${indoorTemp !== "—" ? indoorTemp + unit : indoorTemp}</div>
-                  <div class="humidity" id="splitIndoorHum">${indoorHum !== "—" ? indoorHum + "% humidity" : "Humidity —"}</div>
+              <div class="climate-overview-row">
+                <div class="climate-overview-card climate-overview-indoor">
+                  <div class="split-half">
+                    <div class="label">Indoor</div>
+                    <div class="temp" id="overviewIndoorTemp">${indoorTemp !== "—" ? indoorTemp + unit : indoorTemp}</div>
+                    <div class="humidity" id="overviewIndoorHum">${indoorHum !== "—" ? indoorHum + "% humidity" : "Humidity —"}</div>
+                  </div>
                 </div>
-                <div class="split-half split-outdoor">
-                  <div class="label">Outdoor</div>
-                  <div class="temp" id="splitOutdoorTemp">${outdoorTemp !== "—" ? outdoorTemp + unit : outdoorTemp}</div>
-                  <div class="humidity" id="splitOutdoorHum">${outdoorHum !== "—" ? outdoorHum + "% humidity" : "Humidity —"}</div>
+                <div class="climate-overview-card climate-overview-delta">
+                  <div class="split-half">
+                    <div class="label">Thermal Delta</div>
+                    <div class="temp" id="overviewThermalDelta">${thermalDelta !== "—" ? thermalDelta + "°" : thermalDelta}</div>
+                    <div class="humidity">Indoor vs outdoor</div>
+                  </div>
+                </div>
+                <div class="climate-overview-card climate-overview-outdoor">
+                  <div class="split-half">
+                    <div class="label">Outdoor</div>
+                    <div class="temp" id="overviewOutdoorTemp">${outdoorTemp !== "—" ? outdoorTemp + unit : outdoorTemp}</div>
+                    <div class="humidity" id="overviewOutdoorHum">${outdoorHum !== "—" ? outdoorHum + "% humidity" : "Humidity —"}</div>
+                  </div>
                 </div>
               </div>
               <div class="metric-grid">
@@ -1279,19 +1327,19 @@ class HomeWeatherPanel extends HTMLElement {
                   <div class="sub">${parseFloat(indoorHum) >= 40 && parseFloat(indoorHum) <= 60 ? "Balanced" : "—"}</div>
                 </div>
                 <div class="metric">
+                  <div class="label">Target Delta</div>
+                  <div class="value">${targetDelta !== "—" ? targetDelta + "°" : targetDelta}</div>
+                  <div class="sub">Ambient vs target</div>
+                </div>
+                <div class="metric">
+                  <div class="label">Dew Point</div>
+                  <div class="value">${dewPoint !== "—" ? dewPoint + unit : dewPoint}</div>
+                  <div class="sub">From temp+humidity</div>
+                </div>
+                <div class="metric">
                   <div class="label">Air Quality</div>
                   <div class="value">Good</div>
                   <div class="sub">Clean</div>
-                </div>
-                <div class="metric">
-                  <div class="label">Pressure</div>
-                  <div class="value">1013</div>
-                  <div class="sub">mbar stable</div>
-                </div>
-                <div class="metric">
-                  <div class="label">Thermal Delta</div>
-                  <div class="value">${thermalDelta !== "—" ? thermalDelta + "°" : thermalDelta}</div>
-                  <div class="sub">Indoor vs outdoor</div>
                 </div>
               </div>
             </div>
