@@ -56,7 +56,14 @@ async def websocket_get_config(
     """Get the full configuration."""
     config_manager = hass.data.get(DOMAIN, {}).get("config_manager")
     if config_manager:
-        connection.send_result(msg["id"], config_manager.config)
+        try:
+            from homeassistant.loader import async_get_integration
+            integration = await async_get_integration(hass, DOMAIN)
+            version = integration.manifest.get("version", "1.0.0")
+        except Exception:
+            version = "1.0.0"
+        result = {**config_manager.config, "version": version}
+        connection.send_result(msg["id"], result)
     else:
         connection.send_error(msg["id"], "not_ready", "Config manager not initialized")
 

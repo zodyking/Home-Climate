@@ -777,7 +777,7 @@ class HomeWeatherPanel extends HTMLElement {
 
   _startRefresh() {
     this._stopRefresh();
-    this._refreshInterval = setInterval(() => this._loadDashboardData(), 1000);
+    this._refreshInterval = setInterval(() => this._loadDashboardData(), 500);
   }
 
   _stopRefresh() {
@@ -898,6 +898,95 @@ class HomeWeatherPanel extends HTMLElement {
       const stat1 = summaryCards[1].querySelectorAll(".room-stat-value");
       if (stat0.length >= 2) { stat0[0].textContent = outdoorTemp; stat0[1].textContent = outdoorHum; }
       if (stat1.length >= 2) { stat1[0].textContent = indoorTemp; stat1[1].textContent = indoorHum; }
+    }
+
+    // Patch thermostat card (setpoint, mode buttons, fan label/slider, step-btn data)
+    if (primary) {
+      const mode = (primary.climate_mode || primary.climate_state || "off").toLowerCase();
+      const setpointEl = root.querySelector("#setpointValue");
+      const target = primary.target_temp != null ? Math.round(tempUnit === "°C" ? this._cToF(primary.target_temp) : primary.target_temp) : 70;
+      if (setpointEl) setpointEl.textContent = `${target}°`;
+
+      root.querySelectorAll(".thermostat .mode-btn").forEach((btn) => {
+        const dm = (btn.dataset.mode || "").toLowerCase();
+        btn.classList.toggle("active", mode === dm);
+      });
+
+      root.querySelectorAll(".thermostat .step-btn").forEach((btn) => {
+        btn.dataset.hvacMode = mode;
+      });
+
+      const fanMode = primary.fan_mode || "Auto";
+      const fanPct = primary.percentage;
+      const fanSpeedDisplay = this._fanSpeedDisplay(fanMode, fanPct);
+      const fanSpeedVal = this._fanSpeedValue(fanMode, fanPct);
+      const fanLabelEl = root.querySelector("#fanLabel");
+      if (fanLabelEl) fanLabelEl.textContent = `${fanMode} • ${fanSpeedDisplay}`;
+
+      const fanSlider = root.querySelector(".thermostat .fan-slider");
+      if (fanSlider) {
+        fanSlider.value = fanSpeedVal;
+        fanSlider.disabled = !((fanPct != null && typeof fanPct === "number" && !isNaN(fanPct)) || (primary.fan_modes || []).length > 0);
+      }
+
+      const selectedRoom = this._selectedRoomId ? newRooms.find((r) => (r.id || "") === this._selectedRoomId) : null;
+      const badge = root.querySelector(".thermostat .mini-badge");
+      if (badge) badge.textContent = selectedRoom ? (selectedRoom.name || "Room") : "No Selection";
+    }
+
+    // Patch zone cards (temp, tag, meta, bar)
+    const zonesGrid = root.querySelector(".zones-grid");
+    if (zonesGrid) {
+      const zoneCards = zonesGrid.querySelectorAll(".zone-card");
+      for (const room of newRooms) {
+        const zoneCard = Array.from(zoneCards).find((el) => (el.dataset.roomId || "") === (room.id || ""));
+        if (!zoneCard) continue;
+
+        const roomTempUnit = room.temperature_unit || "°F";
+        const rawTemp = room.temp;
+        const tempF = rawTemp != null ? (roomTempUnit === "°C" ? this._cToF(rawTemp) : rawTemp) : null;
+        const temp = tempF != null ? Math.round(tempF) : "—";
+        const humidity = room.humidity != null ? room.humidity.toFixed(0) : "—";
+        const unit = DISPLAY_UNIT;
+        const firstApp = (room.appliances || [])[0];
+        const hvacAction = firstApp?.hvac_action;
+        const zoneSetpoint = primary && primary.target_temp != null ? (tempUnit === "°C" ? this._cToF(primary.target_temp) : primary.target_temp) : null;
+        let tag = "Stable";
+        if (hvacAction === "heating") tag = "Heating";
+        else if (hvacAction === "cooling") tag = "Cooling";
+        else if (typeof tempF === "number" && zoneSetpoint != null) {
+          const delta = tempF - zoneSetpoint;
+          if (delta > 1.5) tag = "Warm";
+          else if (delta < -1.5) tag = "Cool";
+          else if (Math.abs(delta) <= 1) tag = "Balanced";
+        }
+        const hum = parseFloat(humidity);
+        if (tag === "Stable" && !isNaN(hum) && hum < 35) tag = "Dry";
+        const minT = 55, maxT = 90;
+        const barPct = typeof tempF === "number" ? Math.max(0, Math.min(100, ((tempF - minT) / (maxT - minT)) * 100)) : 70;
+
+        const tempVal = zoneCard.querySelector(".zone-temp .value");
+        if (tempVal) tempVal.textContent = temp;
+        const tagEl = zoneCard.querySelector(".zone-tag");
+        if (tagEl) tagEl.textContent = tag;
+        const metaSpans = zoneCard.querySelectorAll(".zone-meta span");
+        if (metaSpans.length >= 1) metaSpans[0].textContent = `${humidity}% humidity`;
+        const barSpan = zoneCard.querySelector(".zone-bar span");
+        if (barSpan) barSpan.style.width = `${barPct}%`;
+      }
+    }
+
+    // Patch system health (compressor)
+    const hvacAction = primary?.hvac_action || null;
+    const compressorLabel = hvacAction && ["heating", "cooling"].includes(hvacAction) ? "Active" : (hvacAction === "idle" ? "Idle" : "—");
+    const compressorItems = root.querySelectorAll(".systems .data-item");
+    for (const item of compressorItems) {
+      const span = item.querySelector("span");
+      if (span && span.textContent.trim().toLowerCase() === "compressor") {
+        const strong = item.querySelector("strong.blue");
+        if (strong) strong.textContent = compressorLabel;
+        break;
+      }
     }
 
     if (newRooms.length !== prevRooms.length) return false;
@@ -1214,7 +1303,7 @@ class HomeWeatherPanel extends HTMLElement {
               <div class="page-title">Home Climate</div>
               <div class="page-sub">Command center for room monitoring, thermostat control, airflow, and system health</div>
             </div>
-            <div class="title-badge">HUD ACTIVE</div>
+            <div class="title-badge">V ${(this._config?.version || "1.0.0")}</div>
           </div>
           ${this._isAdmin ? `
             <button class="icon-panel" id="settings-btn" aria-label="Settings" title="Settings">
